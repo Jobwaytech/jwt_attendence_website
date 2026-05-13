@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
 };
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
 const state = {
   route: window.location.pathname,
@@ -78,6 +79,11 @@ async function apiRequest(path, options = {}) {
 }
 
 async function loadConfig() {
+  if (GOOGLE_CLIENT_ID) {
+    state.googleClientId = GOOGLE_CLIENT_ID;
+    return;
+  }
+
   const result = await apiRequest("/api/config");
   state.googleClientId = result.googleClientId || "";
 }
