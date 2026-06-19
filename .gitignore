@@ -21,8 +21,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Vercel
-.vercel/
 
 # OS / editor files
 .DS_Store

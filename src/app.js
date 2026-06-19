@@ -4,6 +4,7 @@ const STORAGE_KEYS = {
   token: "authflow_token",
   session: "authflow_current_user",
   theme: "authflow_theme",
+  users: "authflow_users",
 };
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -13,7 +14,7 @@ const state = {
   route: window.location.pathname,
   menuOpen: false,
   search: "",
-  users: [],
+  users: JSON.parse(localStorage.getItem(STORAGE_KEYS.users) || "[]"),
   session: JSON.parse(localStorage.getItem(STORAGE_KEYS.session) || "null"),
   loading: true,
   googleClientId: "",
@@ -111,7 +112,7 @@ function icon(name, label = "") {
 function shell(content, options = {}) {
   const session = state.session;
   const theme = document.documentElement.dataset.theme || "light";
-  const links = session?.role === "admin"
+  const links = ["super_admin", "branch_admin"].includes(session?.role)
     ? [{ href: "/admin-dashboard", label: "Dashboard" }]
     : [
         { href: "/login", label: "Login" },
@@ -160,7 +161,7 @@ function shell(content, options = {}) {
 }
 
 function loginView() {
-  if (state.session?.role === "admin") {
+  if (["super_admin", "branch_admin"].includes(state.session?.role)) {
     navigate("/admin-dashboard");
     return "";
   }
@@ -172,7 +173,7 @@ function loginView() {
           <div class="metric-tile">
             ${icon("shield-check")}
             <strong>Role based</strong>
-            <span>Admin access control</span>
+            <span>Role access control</span>
           </div>
           <div class="metric-tile">
             ${icon("sparkles")}
@@ -190,12 +191,12 @@ function loginView() {
       <section class="auth-card" aria-labelledby="login-title">
         <div class="eyebrow">${icon("lock-keyhole", "Secure demo portal")}</div>
         <h1 id="login-title">Welcome back</h1>
-        <p class="lead">Sign in with your registered admin account to open the dashboard.</p>
+        <p class="lead">Sign in with your registered role account to open the dashboard.</p>
 
         <form class="form" data-form="login" novalidate>
           <label>
             <span>Email address</span>
-            <input type="email" name="email" placeholder="admin@example.com" autocomplete="email" />
+            <input type="email" name="email" placeholder="superadmin@example.com" autocomplete="email" />
             <small class="field-error" data-error-for="email"></small>
           </label>
 
@@ -209,8 +210,10 @@ function loginView() {
           </label>
 
           <div class="form-error" data-form-error></div>
-          <button class="button button--primary" type="submit">${icon("log-in", "Login")}</button>
-        </form>
+<button class="button button--primary" type="submit">${icon("log-in", "Login")}</button>
+</form>
+
+
 
         <div class="divider"><span>or</span></div>
         ${
@@ -238,7 +241,7 @@ function loginView() {
         }
 
         <p class="switch-copy">New here? <button data-route="/register">Create an account</button></p>
-        <div class="demo-note">${icon("info")} Demo admin: <strong>admin@example.com</strong> / <strong>123456</strong></div>
+        <div class="demo-note">${icon("info")} Demo roles: <strong>superadmin@example.com</strong>, <strong>branchadmin@example.com</strong>, <strong>employee@example.com</strong>, <strong>student@example.com</strong> / <strong>123456</strong></div>
       </section>
     </section>
   `);
@@ -250,7 +253,7 @@ function registerView() {
       <section class="auth-card" aria-labelledby="register-title">
         <div class="eyebrow">${icon("user-plus", "Create access")}</div>
         <h1 id="register-title">Register account</h1>
-        <p class="lead">Create an admin or user profile. Admin accounts can enter the dashboard.</p>
+        <p class="lead">Create a role-based profile for portal access.</p>
 
         <form class="form" data-form="register" novalidate>
           <label>
@@ -266,6 +269,30 @@ function registerView() {
           </label>
 
           <div class="form-grid">
+          <label>
+            <span>Date of Birth</span>
+            <input type="date" name="dob" />
+            <small class="field-error" data-error-for="dob"></small>
+          </label>
+
+          <label>
+            <span>OTP Verification</span>
+            <input
+            type="text"
+            name="otp"
+            placeholder="Enter 6-digit OTP"
+            />
+             <small class="field-error" data-error-for="otp"></small>
+          </label>
+          
+          <button
+            type="button"
+            class="button button--ghost"
+            id="generate-otp"
+          >
+            Generate OTP
+            </button>
+
             <label>
               <span>Password</span>
               <div class="password-field">
@@ -288,9 +315,12 @@ function registerView() {
           <label>
             <span>Role</span>
             <select name="role">
-              <option value="admin">Admin</option>
-              <option value="user">User</option>
+              <option value="super_admin">Super Admin</option>
+              <option value="branch_admin">Branch Admin</option>
+              <option value="employee">Employee</option>
+              <option value="student">Student</option>
             </select>
+            <small class="field-error" data-error-for="role"></small>
           </label>
 
           <div class="form-error" data-form-error></div>
@@ -319,14 +349,14 @@ function registerView() {
 
 function dashboardView() {
   const session = state.session;
-  if (!session || session.role !== "admin") {
+  if (!session || !["super_admin", "branch_admin"].includes(session.role)) {
     navigate("/login");
-    showToast("Please login as an admin to continue.", "error");
+    showToast("Please login with a manager role to continue.", "error");
     return "";
   }
 
   const users = state.users;
-  const admins = users.filter((user) => user.role === "admin").length;
+  const managers = users.filter((user) => ["super_admin", "branch_admin"].includes(user.role)).length;
   const filteredUsers = users.filter((user) => {
     const value = `${user.name} ${user.email} ${user.role}`.toLowerCase();
     return value.includes(state.search.toLowerCase());
@@ -336,7 +366,7 @@ function dashboardView() {
     <section class="dashboard">
       <div class="dashboard-hero">
         <div>
-          <div class="eyebrow">${icon("layout-dashboard", "Admin dashboard")}</div>
+          <div class="eyebrow">${icon("layout-dashboard", "Role dashboard")}</div>
           <h1>Hello, ${session.name}</h1>
           <p class="lead">Manage registered users, review roles, and control this demo authentication system.</p>
         </div>
@@ -357,13 +387,13 @@ function dashboardView() {
         </article>
         <article class="stat-card">
           ${icon("shield")}
-          <span>Admins</span>
-          <strong>${admins}</strong>
+          <span>Managers</span>
+          <strong>${managers}</strong>
         </article>
         <article class="stat-card">
           ${icon("user-round")}
           <span>Standard users</span>
-          <strong>${users.length - admins}</strong>
+          <strong>${users.length - managers}</strong>
         </article>
       </section>
 
@@ -371,9 +401,9 @@ function dashboardView() {
         <div class="section-heading">
           <div>
             <h2>Two-factor authentication</h2>
-            <p>${session.twoFactorEnabled ? "2FA is enabled for your admin account." : "Protect this admin account with an authenticator app."}</p>
+            <p>${session.twoFactorEnabled ? "2FA is enabled for your role account." : "Protect this role account with an authenticator app."}</p>
           </div>
-          <span class="role-pill role-pill--${session.twoFactorEnabled ? "admin" : "user"}">
+          <span class="role-pill role-pill--${session.twoFactorEnabled ? "super_admin" : "employee"}">
             ${session.twoFactorEnabled ? "Enabled" : "Not enabled"}
           </span>
         </div>
@@ -603,18 +633,48 @@ async function handleRegister(form) {
     setFieldError(form, "confirmPassword", "Passwords must match.");
     valid = false;
   }
+  if (!["super_admin", "branch_admin", "employee", "student"].includes(data.role)) {
+    setFieldError(form, "role", "Choose a valid role.");
+    valid = false;
+  }
+  const savedOtp = localStorage.getItem("demo_otp");
+
+if (!data.otp || data.otp !== savedOtp) {
+  setFieldError(form, "otp", "Invalid OTP.");
+  valid = false;
+}
   if (!valid) return;
 
   try {
-    await apiRequest("/api/register", {
-      method: "POST",
-      body: JSON.stringify({
-        name: data.name.trim(),
-        email: data.email.trim(),
-        password: data.password,
-        role: data.role,
-      }),
-    });
+    
+    const users = JSON.parse(
+  localStorage.getItem(STORAGE_KEYS.users) || "[]"
+);
+
+const existingUser = users.find(
+  (user) => user.email === data.email.trim()
+);
+
+if (existingUser) {
+  throw new Error("User already exists.");
+}
+
+const newUser = {
+  id: Date.now().toString(),
+  name: data.name.trim(),
+  email: data.email.trim(),
+  password: data.password,
+  dob: data.dob,
+  role: data.role,
+  createdAt: new Date().toISOString(),
+};
+
+users.push(newUser);
+
+localStorage.setItem(
+  STORAGE_KEYS.users,
+  JSON.stringify(users)
+);
 
     showToast("Registration complete. Please login.");
     navigate("/login");
@@ -624,9 +684,9 @@ async function handleRegister(form) {
 }
 
 async function loadUsers() {
-  if (state.session?.role !== "admin") return;
-  const result = await apiRequest("/api/users");
-  state.users = result.users;
+  state.users = JSON.parse(
+    localStorage.getItem(STORAGE_KEYS.users) || "[]"
+  );
 }
 
 async function startTwoFactorSetup() {
@@ -711,14 +771,19 @@ function initializeGoogleSignIn() {
 }
 
 async function hydrateSession() {
-  try {
-    await loadConfig();
-  } catch {
-    state.googleClientId = "";
+  const session = JSON.parse(
+    localStorage.getItem(STORAGE_KEYS.session) || "null"
+  );
+
+  if (session) {
+    state.session = session;
+    await loadUsers();
+    state.loading = false;
+    render();
+    return;
   }
-  const token = localStorage.getItem(STORAGE_KEYS.token);
-  if (!token) {
-    clearSession();
+
+  if (!localStorage.getItem(STORAGE_KEYS.token)) {
     state.loading = false;
     render();
     return;
@@ -737,6 +802,8 @@ async function hydrateSession() {
 }
 
 document.addEventListener("click", (event) => {
+
+
   const routeButton = event.target.closest("[data-route]");
   if (routeButton) {
     navigate(routeButton.dataset.route);
@@ -747,6 +814,15 @@ document.addEventListener("click", (event) => {
   if (!actionButton) return;
 
   const action = actionButton.dataset.action;
+  if (event.target.id === "generate-otp") {
+  const otp = Math.floor(
+    100000 + Math.random() * 900000
+  );
+
+  localStorage.setItem("demo_otp", otp);
+
+  alert(`Demo OTP: ${otp}`);
+}
   if (action === "toggle-menu") {
     state.menuOpen = !state.menuOpen;
     render();
@@ -767,15 +843,27 @@ document.addEventListener("click", (event) => {
     window.lucide?.createIcons();
   }
   if (action === "delete-user") {
-    const userId = actionButton.dataset.userId;
-    apiRequest(`/api/users/${userId}`, { method: "DELETE" })
-      .then((result) => {
-        state.users = result.users;
-        showToast("User deleted.");
-        render();
-      })
-      .catch((error) => showToast(error.message, "error"));
-  }
+  const userId = actionButton.dataset.userId;
+
+  const users = JSON.parse(
+    localStorage.getItem(STORAGE_KEYS.users) || "[]"
+  );
+
+  const updatedUsers = users.filter(
+    (user) => user.id !== userId
+  );
+
+  localStorage.setItem(
+    STORAGE_KEYS.users,
+    JSON.stringify(updatedUsers)
+  );
+
+  state.users = updatedUsers;
+
+  showToast("User deleted.");
+
+  render();
+}
   if (action === "start-2fa") {
     startTwoFactorSetup();
   }

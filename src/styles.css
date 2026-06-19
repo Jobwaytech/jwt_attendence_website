@@ -700,12 +700,14 @@ td {
   text-transform: capitalize;
 }
 
-.role-pill--admin {
+.role-pill--super_admin,
+.role-pill--branch_admin {
   background: rgba(15, 159, 143, 0.14);
   color: var(--primary-strong);
 }
 
-.role-pill--user {
+.role-pill--employee,
+.role-pill--student {
   background: rgba(245, 158, 11, 0.18);
   color: #b45309;
 }
