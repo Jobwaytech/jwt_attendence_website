@@ -15,6 +15,9 @@
     "start": "node server.js",
     "preview": "npm run build && npm run start"
   },
+  "devDependencies": {
+    "next": "16.2.6"
+  },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "concurrently": "^9.2.1",
