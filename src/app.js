@@ -356,13 +356,16 @@ function dashboardView() {
   }
 
   const users = state.users;
-  const managers = users.filter((user) => ["super_admin", "branch_admin"].includes(user.role)).length;
+  const managers = users.filter((user) =>
+    ["super_admin", "branch_admin"].includes(user.role),
+  ).length;
   const filteredUsers = users.filter((user) => {
     const value = `${user.name} ${user.email} ${user.role}`.toLowerCase();
     return value.includes(state.search.toLowerCase());
   });
 
-  return shell(`
+  return shell(
+    `
     <section class="dashboard">
       <div class="dashboard-hero">
         <div>
@@ -496,7 +499,9 @@ function dashboardView() {
         </div>
       </section>
     </section>
-  `, { dashboard: true });
+  `,
+    { dashboard: true },
+  );
 }
 
 function notFoundView() {
@@ -534,7 +539,9 @@ function render() {
 }
 
 function clearErrors(form) {
-  form.querySelectorAll(".field-error").forEach((error) => (error.textContent = ""));
+  form
+    .querySelectorAll(".field-error")
+    .forEach((error) => (error.textContent = ""));
   form.querySelector("[data-form-error]").textContent = "";
 }
 
@@ -585,7 +592,11 @@ async function completePrimaryLogin(result) {
   state.twoFactorMessage = "";
   setSession(result.user, result.token);
   await loadUsers();
-  showToast(result.needs2faSetup ? "Login successful. Set up 2FA next." : "Login successful.");
+  showToast(
+    result.needs2faSetup
+      ? "Login successful. Set up 2FA next."
+      : "Login successful.",
+  );
   navigate("/admin-dashboard");
 }
 
@@ -633,48 +644,42 @@ async function handleRegister(form) {
     setFieldError(form, "confirmPassword", "Passwords must match.");
     valid = false;
   }
-  if (!["super_admin", "branch_admin", "employee", "student"].includes(data.role)) {
+  if (
+    !["super_admin", "branch_admin", "employee", "student"].includes(data.role)
+  ) {
     setFieldError(form, "role", "Choose a valid role.");
     valid = false;
   }
   const savedOtp = localStorage.getItem("demo_otp");
 
-if (!data.otp || data.otp !== savedOtp) {
-  setFieldError(form, "otp", "Invalid OTP.");
-  valid = false;
-}
+  if (!data.otp || data.otp !== savedOtp) {
+    setFieldError(form, "otp", "Invalid OTP.");
+    valid = false;
+  }
   if (!valid) return;
 
   try {
-    
-    const users = JSON.parse(
-  localStorage.getItem(STORAGE_KEYS.users) || "[]"
-);
+    const users = JSON.parse(localStorage.getItem(STORAGE_KEYS.users) || "[]");
 
-const existingUser = users.find(
-  (user) => user.email === data.email.trim()
-);
+    const existingUser = users.find((user) => user.email === data.email.trim());
 
-if (existingUser) {
-  throw new Error("User already exists.");
-}
+    if (existingUser) {
+      throw new Error("User already exists.");
+    }
 
-const newUser = {
-  id: Date.now().toString(),
-  name: data.name.trim(),
-  email: data.email.trim(),
-  password: data.password,
-  dob: data.dob,
-  role: data.role,
-  createdAt: new Date().toISOString(),
-};
+    const newUser = {
+      id: Date.now().toString(),
+      name: data.name.trim(),
+      email: data.email.trim(),
+      password: data.password,
+      dob: data.dob,
+      role: data.role,
+      createdAt: new Date().toISOString(),
+    };
 
-users.push(newUser);
+    users.push(newUser);
 
-localStorage.setItem(
-  STORAGE_KEYS.users,
-  JSON.stringify(users)
-);
+    localStorage.setItem(STORAGE_KEYS.users, JSON.stringify(users));
 
     showToast("Registration complete. Please login.");
     navigate("/login");
@@ -684,14 +689,14 @@ localStorage.setItem(
 }
 
 async function loadUsers() {
-  state.users = JSON.parse(
-    localStorage.getItem(STORAGE_KEYS.users) || "[]"
-  );
+  state.users = JSON.parse(localStorage.getItem(STORAGE_KEYS.users) || "[]");
 }
 
 async function startTwoFactorSetup() {
   try {
-    state.twoFactorSetup = await apiRequest("/api/2fa/setup", { method: "POST" });
+    state.twoFactorSetup = await apiRequest("/api/2fa/setup", {
+      method: "POST",
+    });
     render();
   } catch (error) {
     showToast(error.message, "error");
@@ -742,7 +747,12 @@ async function handleDisableTwoFactor(form) {
 }
 
 function initializeGoogleSignIn() {
-  if (!state.googleClientId || state.route !== "/login" || !window.google?.accounts?.id) return;
+  if (
+    !state.googleClientId ||
+    state.route !== "/login" ||
+    !window.google?.accounts?.id
+  )
+    return;
   const container = document.querySelector("#googleSignIn");
   if (!container) return;
 
@@ -762,7 +772,10 @@ function initializeGoogleSignIn() {
   });
 
   window.google.accounts.id.renderButton(container, {
-    theme: document.documentElement.dataset.theme === "dark" ? "filled_black" : "outline",
+    theme:
+      document.documentElement.dataset.theme === "dark"
+        ? "filled_black"
+        : "outline",
     size: "large",
     width: Math.min(container.clientWidth || 320, 360),
     text: "continue_with",
@@ -772,7 +785,7 @@ function initializeGoogleSignIn() {
 
 async function hydrateSession() {
   const session = JSON.parse(
-    localStorage.getItem(STORAGE_KEYS.session) || "null"
+    localStorage.getItem(STORAGE_KEYS.session) || "null",
   );
 
   if (session) {
@@ -802,8 +815,6 @@ async function hydrateSession() {
 }
 
 document.addEventListener("click", (event) => {
-
-
   const routeButton = event.target.closest("[data-route]");
   if (routeButton) {
     navigate(routeButton.dataset.route);
@@ -815,20 +826,20 @@ document.addEventListener("click", (event) => {
 
   const action = actionButton.dataset.action;
   if (event.target.id === "generate-otp") {
-  const otp = Math.floor(
-    100000 + Math.random() * 900000
-  );
+    const otp = Math.floor(100000 + Math.random() * 900000);
 
-  localStorage.setItem("demo_otp", otp);
+    localStorage.setItem("demo_otp", otp);
 
-  alert(`Demo OTP: ${otp}`);
-}
+    alert(`Demo OTP: ${otp}`);
+  }
   if (action === "toggle-menu") {
     state.menuOpen = !state.menuOpen;
     render();
   }
   if (action === "toggle-theme") {
-    applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+    applyTheme(
+      document.documentElement.dataset.theme === "dark" ? "light" : "dark",
+    );
     render();
   }
   if (action === "logout") {
@@ -837,33 +848,30 @@ document.addEventListener("click", (event) => {
     navigate("/login");
   }
   if (action === "toggle-password") {
-    const input = actionButton.closest(".password-field").querySelector("input");
+    const input = actionButton
+      .closest(".password-field")
+      .querySelector("input");
     input.type = input.type === "password" ? "text" : "password";
-    actionButton.innerHTML = icon(input.type === "password" ? "eye" : "eye-off");
+    actionButton.innerHTML = icon(
+      input.type === "password" ? "eye" : "eye-off",
+    );
     window.lucide?.createIcons();
   }
   if (action === "delete-user") {
-  const userId = actionButton.dataset.userId;
+    const userId = actionButton.dataset.userId;
 
-  const users = JSON.parse(
-    localStorage.getItem(STORAGE_KEYS.users) || "[]"
-  );
+    const users = JSON.parse(localStorage.getItem(STORAGE_KEYS.users) || "[]");
 
-  const updatedUsers = users.filter(
-    (user) => user.id !== userId
-  );
+    const updatedUsers = users.filter((user) => user.id !== userId);
 
-  localStorage.setItem(
-    STORAGE_KEYS.users,
-    JSON.stringify(updatedUsers)
-  );
+    localStorage.setItem(STORAGE_KEYS.users, JSON.stringify(updatedUsers));
 
-  state.users = updatedUsers;
+    state.users = updatedUsers;
 
-  showToast("User deleted.");
+    showToast("User deleted.");
 
-  render();
-}
+    render();
+  }
   if (action === "start-2fa") {
     startTwoFactorSetup();
   }

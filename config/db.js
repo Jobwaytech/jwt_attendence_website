@@ -5,7 +5,9 @@ let connectionPromise = null;
 export async function connectDB() {
   const uri = process.env.MONGODB_URI;
   if (!uri) {
-    console.warn("MONGODB_URI is not set. MongoDB APIs are disabled until it is configured.");
+    console.warn(
+      "MONGODB_URI is not set. MongoDB APIs are disabled until it is configured.",
+    );
     return null;
   }
 

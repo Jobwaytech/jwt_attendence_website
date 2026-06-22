@@ -1,11 +1,31 @@
 import type { NextConfig } from "next";
 
-const apiBaseUrl = (process.env.API_BASE_URL || "http://127.0.0.1:5001").replace(/\/$/, "");
+const apiBaseUrl = (
+  process.env.API_BASE_URL || "http://127.0.0.1:5000"
+).replace(/\/$/, "");
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ["192.168.1.12", "192.168.1.10"],
+  allowedDevOrigins: [
+    "192.168.1.16",
+    "192.168.1.8",
+    "192.168.1.12",
+    "192.168.1.10",
+  ],
+  devIndicators: false,
   turbopack: {
     root: process.cwd(),
+  },
+  webpack(config, { isServer }) {
+    if (!isServer) {
+      config.resolve = config.resolve || {};
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        encoding: false,
+        fs: false,
+      };
+    }
+
+    return config;
   },
   async headers() {
     return [

@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "set USE_HTTPS=true&& set API_BASE_URL=http://127.0.0.1:5001&& concurrently \"npm:server\" \"npm:client\" \"npm:open\"",
+    "dev": "set USE_HTTPS=true&& set API_BASE_URL=http://127.0.0.1:5000&& concurrently \"npm:server\" \"npm:client\" \"npm:open\"",
     "open": "node scripts/open-browser.js https://localhost:3000",
     "client": "npm --prefix authflow-next run dev",
     "client:vite": "vite --host 0.0.0.0 --open",

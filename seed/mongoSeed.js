@@ -1,33 +1,50 @@
 import bcrypt from "bcryptjs";
-import { Attendance, Branch, Calendar, Leave, Payroll, Report, Task, User } from "../models/index.js";
+import {
+  Attendance,
+  Branch,
+  Calendar,
+  Leave,
+  Payroll,
+  Report,
+  Task,
+  User,
+} from "../models/index.js";
 
 const passwordHashPromise = bcrypt.hash("123456", 10);
 const TASK_EMPLOYEES = [
   { name: "Prudhvi", email: "prudhvi@example.com", employeeId: "EMP-E1" },
   { name: "Ramesh", email: "ramesh@example.com", employeeId: "EMP-E2" },
-  { name: "Likhith Reddy", email: "likhith.reddy@example.com", employeeId: "EMP-E3" },
+  {
+    name: "Likhith Reddy",
+    email: "likhith.reddy@example.com",
+    employeeId: "EMP-E3",
+  },
   { name: "Praneetha", email: "praneetha@example.com", employeeId: "EMP-E4" },
   { name: "Pushpa", email: "pushpa@example.com", employeeId: "EMP-E5" },
 ];
 
 async function ensureTaskEmployees(branchId, passwordHash) {
   if (!branchId) return [];
-  return Promise.all(TASK_EMPLOYEES.map((employee, index) => User.findOneAndUpdate(
-    { email: employee.email },
-    {
-      ...employee,
-      passwordHash,
-      role: "employee",
-      roleLabel: "Employee",
-      branchId,
-      phone: "",
-      profile: `Task employee ${index + 1}`,
-      salary: 45000,
-      provider: "password",
-      faceSignature: "not-enrolled",
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
-  )));
+  return Promise.all(
+    TASK_EMPLOYEES.map((employee, index) =>
+      User.findOneAndUpdate(
+        { email: employee.email },
+        {
+          ...employee,
+          passwordHash,
+          role: "employee",
+          roleLabel: "Employee",
+          branchId,
+          phone: "",
+          profile: `Task employee ${index + 1}`,
+          salary: 45000,
+          provider: "password",
+          faceSignature: "not-enrolled",
+        },
+        { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
+      ),
+    ),
+  );
 }
 
 async function ensureDemoPayslip(passwordHash) {
@@ -41,7 +58,7 @@ async function ensureDemoPayslip(passwordHash) {
       contactEmail: "hyderabad@example.com",
       contactPhone: "+91 90000 00001",
     },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
+    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
   );
   const superAdmin = await User.findOneAndUpdate(
     { email: "superadmin@example.com" },
@@ -56,7 +73,7 @@ async function ensureDemoPayslip(passwordHash) {
       profile: "Global system owner",
       provider: "password",
     },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
+    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
   );
   const employee = await User.findOneAndUpdate(
     { email: "employee@example.com" },
@@ -75,7 +92,7 @@ async function ensureDemoPayslip(passwordHash) {
       provider: "password",
       faceSignature: "not-enrolled",
     },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
+    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
   );
 
   await Payroll.findOneAndUpdate(
@@ -108,7 +125,7 @@ async function ensureDemoPayslip(passwordHash) {
       processedBy: superAdmin._id,
       processedAt: new Date(),
     },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
+    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
   );
 
   return { branch, superAdmin, employee };
@@ -116,7 +133,9 @@ async function ensureDemoPayslip(passwordHash) {
 
 export async function seedMongoData() {
   const passwordHash = await passwordHashPromise;
-  const existingSuperAdmin = await User.exists({ email: "superadmin@example.com" });
+  const existingSuperAdmin = await User.exists({
+    email: "superadmin@example.com",
+  });
   if (existingSuperAdmin) {
     const demo = await ensureDemoPayslip(passwordHash);
     await ensureTaskEmployees(demo.branch?._id, passwordHash);

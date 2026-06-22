@@ -12,15 +12,29 @@ const locationSchema = new mongoose.Schema(
 
 const attendanceSchema = new mongoose.Schema(
   {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
-    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      default: null,
+      index: true,
+    },
     date: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/ },
     attendanceDate: { type: String, match: /^\d{4}-\d{2}-\d{2}$/ },
     clockInAt: { type: Date },
     clockOutAt: { type: Date },
     clockIn: { type: Date },
     clockOut: { type: Date },
-    status: { type: String, enum: ["present", "absent", "invalid"], default: "present" },
+    status: {
+      type: String,
+      enum: ["present", "absent", "invalid"],
+      default: "present",
+    },
     invalidReason: { type: String, trim: true },
     clockInLocation: locationSchema,
     clockOutLocation: locationSchema,
@@ -30,7 +44,11 @@ const attendanceSchema = new mongoose.Schema(
     faceVerified: { type: Boolean, default: false },
     matchScore: { type: Number, min: 0, max: 100, default: 0 },
     livenessVerified: { type: Boolean, default: false },
-    livenessChallenge: { type: String, enum: ["blink", "turn_left", "turn_right", "smile", ""], default: "" },
+    livenessChallenge: {
+      type: String,
+      enum: ["blink", "turn_left", "turn_right", "smile", ""],
+      default: "",
+    },
     latitude: { type: Number, min: -90, max: 90 },
     longitude: { type: Number, min: -180, max: 180 },
     distanceFromOffice: { type: Number, min: 0 },
@@ -46,4 +64,5 @@ const attendanceSchema = new mongoose.Schema(
 
 attendanceSchema.index({ userId: 1, date: 1 }, { unique: true });
 
-export default mongoose.models.Attendance || mongoose.model("Attendance", attendanceSchema);
+export default mongoose.models.Attendance ||
+  mongoose.model("Attendance", attendanceSchema);

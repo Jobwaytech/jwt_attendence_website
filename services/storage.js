@@ -28,13 +28,25 @@ async function uploadCloudinary({ dataUrl, category }) {
   form.set("file", dataUrl);
   form.set("upload_preset", preset);
   form.set("folder", `job-way-tech/${category}`);
-  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloud}/auto/upload`, { method: "POST", body: form });
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${cloud}/auto/upload`,
+    { method: "POST", body: form },
+  );
   if (!response.ok) throw new Error("Cloudinary upload failed.");
   const data = await response.json();
-  return { provider: "cloudinary", url: data.secure_url, publicId: data.public_id, size: data.bytes };
+  return {
+    provider: "cloudinary",
+    url: data.secure_url,
+    publicId: data.public_id,
+    size: data.bytes,
+  };
 }
 
-export async function storeFile({ dataUrl, category, originalName = "upload" }) {
+export async function storeFile({
+  dataUrl,
+  category,
+  originalName = "upload",
+}) {
   const cloudinary = await uploadCloudinary({ dataUrl, category });
   if (cloudinary) return cloudinary;
 

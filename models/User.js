@@ -5,11 +5,27 @@ const USER_ROLES = ["super_admin", "branch_admin", "employee", "student"];
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true, minlength: 2 },
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true, match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+    },
     passwordHash: { type: String, default: null },
-    role: { type: String, enum: USER_ROLES, required: true, default: "employee" },
+    role: {
+      type: String,
+      enum: USER_ROLES,
+      required: true,
+      default: "employee",
+    },
     roleLabel: { type: String, trim: true },
-    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null },
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      default: null,
+    },
     legacyId: { type: String, index: true },
     phone: { type: String, trim: true },
     dob: { type: Date },
@@ -17,7 +33,11 @@ const userSchema = new mongoose.Schema(
     employeeId: { type: String, trim: true },
     studentId: { type: String, trim: true },
     salary: { type: Number, min: 0 },
-    provider: { type: String, enum: ["password", "google"], default: "password" },
+    provider: {
+      type: String,
+      enum: ["password", "google"],
+      default: "password",
+    },
     googleSub: { type: String, trim: true },
     picture: { type: String, trim: true },
     twoFactorEnabled: { type: Boolean, default: false },

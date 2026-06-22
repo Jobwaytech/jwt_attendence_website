@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --webpack --experimental-https --experimental-https-key ./certificates/authflow-key.pem --experimental-https-cert ./certificates/authflow.pem",
+    "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
     "@mediapipe/face_detection": "^0.4.1646425229",
+    "encoding": "^0.1.13",
     "face-api.js": "^0.22.2",
     "lucide-react": "^1.14.0",
     "next": "16.2.6",

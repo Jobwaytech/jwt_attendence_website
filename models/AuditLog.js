@@ -2,7 +2,12 @@ import mongoose from "mongoose";
 
 const auditLogSchema = new mongoose.Schema(
   {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+      index: true,
+    },
     action: { type: String, required: true, trim: true, index: true },
     resource: { type: String, trim: true, index: true },
     resourceId: { type: String, trim: true },
@@ -14,4 +19,5 @@ const auditLogSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-export default mongoose.models.AuditLog || mongoose.model("AuditLog", auditLogSchema);
+export default mongoose.models.AuditLog ||
+  mongoose.model("AuditLog", auditLogSchema);

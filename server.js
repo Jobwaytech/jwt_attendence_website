@@ -6,7 +6,13 @@ import { OAuth2Client } from "google-auth-library";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer as createHttpsServer } from "node:https";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,22 +25,35 @@ import { registerMongoCrudRoutes } from "./routes/mongoCrud.js";
 import { registerProductionFeatureRoutes } from "./routes/productionFeatures.js";
 import { registerStudentPortalRoutes } from "./routes/studentPortal.js";
 import { seedMongoData } from "./seed/mongoSeed.js";
-import { Branch as MongoBranch, LoginHistory, Payroll as MongoPayroll, User as MongoUser } from "./models/index.js";
+import {
+  Branch as MongoBranch,
+  LoginHistory,
+  Payroll as MongoPayroll,
+  User as MongoUser,
+} from "./models/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.API_PORT || process.env.PORT || 5000;
 const USE_HTTPS = process.env.USE_HTTPS === "true";
-const INTERNAL_HTTP_PORT = USE_HTTPS ? Number(process.env.INTERNAL_API_HTTP_PORT || 5001) : 0;
-const HTTPS_KEY_PATH = process.env.HTTPS_KEY_PATH || join(__dirname, "authflow-next", "certificates", "authflow-key.pem");
-const HTTPS_CERT_PATH = process.env.HTTPS_CERT_PATH || join(__dirname, "authflow-next", "certificates", "authflow.pem");
-const JWT_SECRET = process.env.JWT_SECRET || "change-this-secret-before-production";
+const INTERNAL_HTTP_PORT = USE_HTTPS
+  ? Number(process.env.INTERNAL_API_HTTP_PORT || 5001)
+  : 0;
+const HTTPS_KEY_PATH =
+  process.env.HTTPS_KEY_PATH ||
+  join(__dirname, "authflow-next", "certificates", "authflow-key.pem");
+const HTTPS_CERT_PATH =
+  process.env.HTTPS_CERT_PATH ||
+  join(__dirname, "authflow-next", "certificates", "authflow.pem");
+const JWT_SECRET =
+  process.env.JWT_SECRET || "change-this-secret-before-production";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const SMTP_HOST = process.env.SMTP_HOST || "";
 const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
 const SMTP_USER = process.env.SMTP_USER || "";
 const SMTP_PASS = process.env.SMTP_PASS || "";
-const MAIL_FROM = process.env.MAIL_FROM || SMTP_USER || "no-reply@authflow.local";
+const MAIL_FROM =
+  process.env.MAIL_FROM || SMTP_USER || "no-reply@authflow.local";
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "superadmin@example.com")
   .split(",")
   .map((email) => email.trim().toLowerCase())
@@ -88,39 +107,75 @@ const STAFF_ROLES = ["branch_admin", "employee"];
 const ASSIGNABLE_ROLES = ["branch_admin", "employee", "student"];
 const MANAGER_ROLES = ["super_admin", "branch_admin"];
 const ADMIN_2FA_REQUIRED_ROLES = ["super_admin", "branch_admin"];
-const TASK_STATUSES = ["pending", "in_progress", "completed", "hold", "rejected"];
+const TASK_STATUSES = [
+  "pending",
+  "in_progress",
+  "completed",
+  "hold",
+  "rejected",
+];
 const TASK_PRIORITIES = ["low", "medium", "high", "urgent"];
-const CALENDAR_TYPES = ["company_holiday", "branch_holiday", "employee_event", "student_event", "meeting_reminder", "training_schedule", "exam_schedule"];
-const ATTENDANCE_LOCATION_RADIUS_METERS = Number(process.env.ATTENDANCE_LOCATION_RADIUS_METERS || 150);
-const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
+const CALENDAR_TYPES = [
+  "company_holiday",
+  "branch_holiday",
+  "employee_event",
+  "student_event",
+  "meeting_reminder",
+  "training_schedule",
+  "exam_schedule",
+];
+const ATTENDANCE_LOCATION_RADIUS_METERS = Number(
+  process.env.ATTENDANCE_LOCATION_RADIUS_METERS || 150,
+);
+const RATE_LIMIT_WINDOW_MS = Number(
+  process.env.RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000,
+);
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 120);
 const authRateBucket = new Map();
 
 app.set("trust proxy", 1);
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin || !ALLOWED_ORIGINS.length || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-    return callback(new Error("Not allowed by CORS"));
-  },
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (
+        !origin ||
+        !ALLOWED_ORIGINS.length ||
+        ALLOWED_ORIGINS.includes(origin)
+      )
+        return callback(null, true);
+      return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+  }),
+);
 app.use(express.json({ limit: "8mb" }));
 app.use((req, _res, next) => {
   req.body ||= {};
   next();
 });
 app.use((req, res, next) => {
-  if (!req.path.startsWith("/api/login") && !req.path.includes("password") && !req.path.includes("refresh")) return next();
+  if (
+    !req.path.startsWith("/api/login") &&
+    !req.path.includes("password") &&
+    !req.path.includes("refresh")
+  )
+    return next();
   const key = `${req.ip}:${req.path}`;
   const now = Date.now();
-  const item = authRateBucket.get(key) || { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+  const item = authRateBucket.get(key) || {
+    count: 0,
+    resetAt: now + RATE_LIMIT_WINDOW_MS,
+  };
   if (now > item.resetAt) {
     item.count = 0;
     item.resetAt = now + RATE_LIMIT_WINDOW_MS;
   }
   item.count += 1;
   authRateBucket.set(key, item);
-  if (item.count > RATE_LIMIT_MAX) return res.status(429).json({ message: "Too many requests. Try again later." });
+  if (item.count > RATE_LIMIT_MAX)
+    return res
+      .status(429)
+      .json({ message: "Too many requests. Try again later." });
   return next();
 });
 
@@ -135,13 +190,19 @@ app.get("/api/health", (_req, res) => {
 
 async function recordLoginAttempt(req, email, status, message, role = "") {
   if (!isMongoConnected()) return;
-  const mongoUser = await MongoUser.findOne({ email }).lean().catch(() => null);
+  const mongoUser = await MongoUser.findOne({ email })
+    .lean()
+    .catch(() => null);
   await LoginHistory.create({
     userId: mongoUser?._id || null,
     email,
     role: role || mongoUser?.role || "",
     status,
-    ipAddress: String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").split(",")[0].trim(),
+    ipAddress: String(
+      req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "",
+    )
+      .split(",")[0]
+      .trim(),
     userAgent: req.headers["user-agent"] || "",
     message,
   }).catch(() => null);
@@ -157,7 +218,9 @@ function readJson(file, fallback) {
     const backup = `${file}.corrupt-${Date.now()}.bak`;
     writeFileSync(backup, raw);
     writeFileSync(file, JSON.stringify(fallback, null, 2));
-    console.warn(`Recovered malformed JSON table ${file}; backup saved to ${backup}.`);
+    console.warn(
+      `Recovered malformed JSON table ${file}; backup saved to ${backup}.`,
+    );
     return fallback;
   }
 }
@@ -263,25 +326,138 @@ function ensureDatabase() {
     users = users.map((user) => ({
       ...user,
       role: normalizeStoredRole(user.role),
-      branchId: user.branchId ?? (normalizeStoredRole(user.role) === "super_admin" ? null : "branch-hyd-main"),
+      branchId:
+        user.branchId ??
+        (normalizeStoredRole(user.role) === "super_admin"
+          ? null
+          : "branch-hyd-main"),
       phone: user.phone || "",
       dob: user.dob || "",
       profile: user.profile || "",
-      employeeId: user.employeeId || (STAFF_ROLES.includes(normalizeStoredRole(user.role)) ? `EMP-${String(user.id || "").slice(0, 6).toUpperCase()}` : undefined),
-      studentId: user.studentId || (normalizeStoredRole(user.role) === "student" ? `STU-${String(user.id || "").slice(0, 6).toUpperCase()}` : undefined),
-      salary: user.salary ?? (STAFF_ROLES.includes(normalizeStoredRole(user.role)) ? 45000 : undefined),
+      employeeId:
+        user.employeeId ||
+        (STAFF_ROLES.includes(normalizeStoredRole(user.role))
+          ? `EMP-${String(user.id || "")
+              .slice(0, 6)
+              .toUpperCase()}`
+          : undefined),
+      studentId:
+        user.studentId ||
+        (normalizeStoredRole(user.role) === "student"
+          ? `STU-${String(user.id || "")
+              .slice(0, 6)
+              .toUpperCase()}`
+          : undefined),
+      salary:
+        user.salary ??
+        (STAFF_ROLES.includes(normalizeStoredRole(user.role))
+          ? 45000
+          : undefined),
     }));
   }
   const demoAccounts = [
-    { name: "Super Admin", email: "superadmin@example.com", role: "super_admin", branchId: null, phone: "+91 90000 00000", dob: "1990-01-15", profile: "Global system owner" },
-    { name: "Employee Demo", email: "employee@example.com", role: "employee", branchId: "branch-hyd-main", phone: "+91 90000 00003", dob: "1996-05-29", profile: "Employee portal demo account", employeeId: "EMP-1003", salary: 52000, faceSignature: "not-enrolled" },
-    { name: "Student Demo", email: "student@example.com", role: "student", branchId: "branch-hyd-main", phone: "+91 90000 00004", dob: "2003-05-29", profile: "Student portal demo account", studentId: "STU-2001" },
-    { name: "Branch Admin Demo", email: "branchadmin@example.com", role: "branch_admin", branchId: "branch-hyd-main", phone: "+91 90000 00002", dob: "1992-03-12", profile: "Branch admin demo account", employeeId: "EMP-1002", salary: 68000 },
-    { name: "Prudhvi", email: "prudhvi@example.com", role: "employee", branchId: "branch-hyd-main", phone: "", dob: "", profile: "Task employee 1", employeeId: "EMP-E1", salary: 45000, faceSignature: "not-enrolled" },
-    { name: "Ramesh", email: "ramesh@example.com", role: "employee", branchId: "branch-hyd-main", phone: "", dob: "", profile: "Task employee 2", employeeId: "EMP-E2", salary: 45000, faceSignature: "not-enrolled" },
-    { name: "Likhith Reddy", email: "likhith.reddy@example.com", role: "employee", branchId: "branch-hyd-main", phone: "", dob: "", profile: "Task employee 3", employeeId: "EMP-E3", salary: 45000, faceSignature: "not-enrolled" },
-    { name: "Praneetha", email: "praneetha@example.com", role: "employee", branchId: "branch-hyd-main", phone: "", dob: "", profile: "Task employee 4", employeeId: "EMP-E4", salary: 45000, faceSignature: "not-enrolled" },
-    { name: "Pushpa", email: "pushpa@example.com", role: "employee", branchId: "branch-hyd-main", phone: "", dob: "", profile: "Task employee 5", employeeId: "EMP-E5", salary: 45000, faceSignature: "not-enrolled" },
+    {
+      name: "Super Admin",
+      email: "superadmin@example.com",
+      role: "super_admin",
+      branchId: null,
+      phone: "+91 90000 00000",
+      dob: "1990-01-15",
+      profile: "Global system owner",
+    },
+    {
+      name: "Employee Demo",
+      email: "employee@example.com",
+      role: "employee",
+      branchId: "branch-hyd-main",
+      phone: "+91 90000 00003",
+      dob: "1996-05-29",
+      profile: "Employee portal demo account",
+      employeeId: "EMP-1003",
+      salary: 52000,
+      faceSignature: "not-enrolled",
+    },
+    {
+      name: "Student Demo",
+      email: "student@example.com",
+      role: "student",
+      branchId: "branch-hyd-main",
+      phone: "+91 90000 00004",
+      dob: "2003-05-29",
+      profile: "Student portal demo account",
+      studentId: "STU-2001",
+    },
+    {
+      name: "Branch Admin Demo",
+      email: "branchadmin@example.com",
+      role: "branch_admin",
+      branchId: "branch-hyd-main",
+      phone: "+91 90000 00002",
+      dob: "1992-03-12",
+      profile: "Branch admin demo account",
+      employeeId: "EMP-1002",
+      salary: 68000,
+    },
+    {
+      name: "Prudhvi",
+      email: "prudhvi@example.com",
+      role: "employee",
+      branchId: "branch-hyd-main",
+      phone: "",
+      dob: "",
+      profile: "Task employee 1",
+      employeeId: "EMP-E1",
+      salary: 45000,
+      faceSignature: "not-enrolled",
+    },
+    {
+      name: "Ramesh",
+      email: "ramesh@example.com",
+      role: "employee",
+      branchId: "branch-hyd-main",
+      phone: "",
+      dob: "",
+      profile: "Task employee 2",
+      employeeId: "EMP-E2",
+      salary: 45000,
+      faceSignature: "not-enrolled",
+    },
+    {
+      name: "Likhith Reddy",
+      email: "likhith.reddy@example.com",
+      role: "employee",
+      branchId: "branch-hyd-main",
+      phone: "",
+      dob: "",
+      profile: "Task employee 3",
+      employeeId: "EMP-E3",
+      salary: 45000,
+      faceSignature: "not-enrolled",
+    },
+    {
+      name: "Praneetha",
+      email: "praneetha@example.com",
+      role: "employee",
+      branchId: "branch-hyd-main",
+      phone: "",
+      dob: "",
+      profile: "Task employee 4",
+      employeeId: "EMP-E4",
+      salary: 45000,
+      faceSignature: "not-enrolled",
+    },
+    {
+      name: "Pushpa",
+      email: "pushpa@example.com",
+      role: "employee",
+      branchId: "branch-hyd-main",
+      phone: "",
+      dob: "",
+      profile: "Task employee 5",
+      employeeId: "EMP-E5",
+      salary: 45000,
+      faceSignature: "not-enrolled",
+    },
   ];
   for (const account of demoAccounts) {
     if (!users.some((user) => user.email === account.email)) {
@@ -298,7 +474,29 @@ function ensureDatabase() {
   }
   writeJson(FILES.users, users);
 
-  for (const key of ["employees", "students", "faceProfiles", "branchEmployees", "branchStudents", "attendance", "leaves", "tasks", "taskAssignments", "taskStatus", "teams", "teamMembers", "calendarEvents", "birthdayNotifications", "payroll", "salarySlips", "reports", "attendanceRegularization", "sessions", "resetTokens", "notifications"]) {
+  for (const key of [
+    "employees",
+    "students",
+    "faceProfiles",
+    "branchEmployees",
+    "branchStudents",
+    "attendance",
+    "leaves",
+    "tasks",
+    "taskAssignments",
+    "taskStatus",
+    "teams",
+    "teamMembers",
+    "calendarEvents",
+    "birthdayNotifications",
+    "payroll",
+    "salarySlips",
+    "reports",
+    "attendanceRegularization",
+    "sessions",
+    "resetTokens",
+    "notifications",
+  ]) {
     readJson(FILES[key], []);
   }
   syncBranchAssignments();
@@ -317,45 +515,106 @@ function writeUsers(users) {
 function syncBranchAssignments() {
   const users = readJson(FILES.users, []);
   const employees = users
-    .filter((user) => STAFF_ROLES.includes(normalizeRole(user.role)) && user.branchId)
-    .map((user) => ({ id: `${user.branchId}-${user.id}`, branchId: user.branchId, userId: user.id, assignedAt: user.createdAt || new Date().toISOString() }));
+    .filter(
+      (user) => STAFF_ROLES.includes(normalizeRole(user.role)) && user.branchId,
+    )
+    .map((user) => ({
+      id: `${user.branchId}-${user.id}`,
+      branchId: user.branchId,
+      userId: user.id,
+      assignedAt: user.createdAt || new Date().toISOString(),
+    }));
   const students = users
     .filter((user) => normalizeRole(user.role) === "student" && user.branchId)
-    .map((user) => ({ id: `${user.branchId}-${user.id}`, branchId: user.branchId, userId: user.id, assignedAt: user.createdAt || new Date().toISOString() }));
-  writeJson(FILES.employees, employees.map((row) => {
-    const user = users.find((item) => item.id === row.userId);
-    return { id: user?.employeeId || `EMP-${row.userId.slice(0, 6).toUpperCase()}`, userId: row.userId, branchId: row.branchId, phone: user?.phone || "", dob: user?.dob || "", salary: user?.salary || 0 };
-  }));
-  writeJson(FILES.students, students.map((row) => {
-    const user = users.find((item) => item.id === row.userId);
-    return { id: user?.studentId || `STU-${row.userId.slice(0, 6).toUpperCase()}`, userId: row.userId, branchId: row.branchId, phone: user?.phone || "", dob: user?.dob || "" };
-  }));
+    .map((user) => ({
+      id: `${user.branchId}-${user.id}`,
+      branchId: user.branchId,
+      userId: user.id,
+      assignedAt: user.createdAt || new Date().toISOString(),
+    }));
+  writeJson(
+    FILES.employees,
+    employees.map((row) => {
+      const user = users.find((item) => item.id === row.userId);
+      return {
+        id: user?.employeeId || `EMP-${row.userId.slice(0, 6).toUpperCase()}`,
+        userId: row.userId,
+        branchId: row.branchId,
+        phone: user?.phone || "",
+        dob: user?.dob || "",
+        salary: user?.salary || 0,
+      };
+    }),
+  );
+  writeJson(
+    FILES.students,
+    students.map((row) => {
+      const user = users.find((item) => item.id === row.userId);
+      return {
+        id: user?.studentId || `STU-${row.userId.slice(0, 6).toUpperCase()}`,
+        userId: row.userId,
+        branchId: row.branchId,
+        phone: user?.phone || "",
+        dob: user?.dob || "",
+      };
+    }),
+  );
   writeJson(FILES.branchEmployees, employees);
   writeJson(FILES.branchStudents, students);
 }
 
 function seedOperationalData() {
   const users = readUsers();
-  const employee = users.find((user) => normalizeRole(user.role) === "employee");
+  const employee = users.find(
+    (user) => normalizeRole(user.role) === "employee",
+  );
   const student = users.find((user) => normalizeRole(user.role) === "student");
-  const creator = users.find((user) => normalizeRole(user.role) === "super_admin") || users[0];
+  const creator =
+    users.find((user) => normalizeRole(user.role) === "super_admin") ||
+    users[0];
   const teams = readJson(FILES.teams, []);
   if (!teams.length && creator && (employee || student)) {
-    const team = { id: randomUUID(), name: "Demo Work Group", branchId: employee?.branchId || student?.branchId || "branch-hyd-main", type: "mixed", createdBy: creator.id, createdAt: new Date().toISOString() };
+    const team = {
+      id: randomUUID(),
+      name: "Demo Work Group",
+      branchId: employee?.branchId || student?.branchId || "branch-hyd-main",
+      type: "mixed",
+      createdBy: creator.id,
+      createdAt: new Date().toISOString(),
+    };
     teams.push(team);
     writeJson(FILES.teams, teams);
-    writeJson(FILES.teamMembers, [employee, student].filter(Boolean).map((user) => ({ id: randomUUID(), teamId: team.id, userId: user.id, role: normalizeRole(user.role), addedAt: new Date().toISOString() })));
+    writeJson(
+      FILES.teamMembers,
+      [employee, student].filter(Boolean).map((user) => ({
+        id: randomUUID(),
+        teamId: team.id,
+        userId: user.id,
+        role: normalizeRole(user.role),
+        addedAt: new Date().toISOString(),
+      })),
+    );
   }
 }
 
 function publicUser(user) {
-  const { passwordHash, twoFactorSecret, pendingTwoFactorSecret, resetToken, ...safeUser } = user;
+  const {
+    passwordHash,
+    twoFactorSecret,
+    pendingTwoFactorSecret,
+    resetToken,
+    ...safeUser
+  } = user;
   return { ...safeUser, roleLabel: ROLE_LABELS[normalizeRole(user.role)] };
 }
 
 function createToken(user) {
   const sessionId = randomUUID();
-  const token = jwt.sign({ id: user.id, role: normalizeRole(user.role), sessionId }, JWT_SECRET, { expiresIn: "8h" });
+  const token = jwt.sign(
+    { id: user.id, role: normalizeRole(user.role), sessionId },
+    JWT_SECRET,
+    { expiresIn: "8h" },
+  );
   const sessions = readJson(FILES.sessions, []);
   sessions.push({
     id: sessionId,
@@ -370,15 +629,23 @@ function createToken(user) {
 }
 
 function createTwoFactorToken(user) {
-  return jwt.sign({ id: user.id, purpose: "2fa" }, JWT_SECRET, { expiresIn: "5m" });
+  return jwt.sign({ id: user.id, purpose: "2fa" }, JWT_SECRET, {
+    expiresIn: "5m",
+  });
 }
 
 function createTwoFactorSetupToken(user) {
-  return jwt.sign({ id: user.id, purpose: "2fa_setup" }, JWT_SECRET, { expiresIn: "10m" });
+  return jwt.sign({ id: user.id, purpose: "2fa_setup" }, JWT_SECRET, {
+    expiresIn: "10m",
+  });
 }
 
 function createEmailOtpToken(user, challengeId) {
-  return jwt.sign({ id: user.id, challengeId, purpose: "email_otp" }, JWT_SECRET, { expiresIn: "5m" });
+  return jwt.sign(
+    { id: user.id, challengeId, purpose: "email_otp" },
+    JWT_SECRET,
+    { expiresIn: "5m" },
+  );
 }
 
 function verifyTwoFactorToken(token) {
@@ -389,13 +656,15 @@ function verifyTwoFactorToken(token) {
 
 function verifyTwoFactorSetupToken(token) {
   const payload = jwt.verify(token, JWT_SECRET);
-  if (payload.purpose !== "2fa_setup") throw new Error("Invalid 2FA setup token.");
+  if (payload.purpose !== "2fa_setup")
+    throw new Error("Invalid 2FA setup token.");
   return payload;
 }
 
 function verifyEmailOtpToken(token) {
   const payload = jwt.verify(token, JWT_SECRET);
-  if (payload.purpose !== "email_otp") throw new Error("Invalid email OTP token.");
+  if (payload.purpose !== "email_otp")
+    throw new Error("Invalid email OTP token.");
   return payload;
 }
 
@@ -408,7 +677,11 @@ async function createRequiredTwoFactorSetup(user) {
   const storedUser = users.find((item) => item.id === user.id);
   if (!storedUser) throw new Error("User not found.");
   const secret = generateSecret();
-  const otpauth = generateURI({ issuer: "AuthFlow", label: storedUser.email, secret });
+  const otpauth = generateURI({
+    issuer: "AuthFlow",
+    label: storedUser.email,
+    secret,
+  });
   storedUser.pendingTwoFactorSecret = secret;
   writeUsers(users);
   return {
@@ -416,7 +689,8 @@ async function createRequiredTwoFactorSetup(user) {
     twoFactorSetupToken: createTwoFactorSetupToken(storedUser),
     qrCodeDataUrl: await QRCode.toDataURL(otpauth),
     manualEntryKey: secret,
-    message: "Set up two-step verification to continue. Admin accounts cannot enter the portal without it.",
+    message:
+      "Set up two-step verification to continue. Admin accounts cannot enter the portal without it.",
   };
 }
 
@@ -430,7 +704,10 @@ async function sendLoginOtpEmail(user, otp) {
 
   if (!mailTransportReady()) {
     console.warn(`[DEV LOGIN OTP] ${user.email}: ${otp}`);
-    appendFileSync(DEV_LOGIN_OTP_LOG, `${new Date().toISOString()} ${user.email} ${otp}\n`);
+    appendFileSync(
+      DEV_LOGIN_OTP_LOG,
+      `${new Date().toISOString()} ${user.email} ${otp}\n`,
+    );
     return { delivered: false, devOtp: otp };
   }
 
@@ -440,7 +717,12 @@ async function sendLoginOtpEmail(user, otp) {
     secure: SMTP_PORT === 465,
     auth: { user: SMTP_USER, pass: SMTP_PASS },
   });
-  await transporter.sendMail({ from: MAIL_FROM, to: user.email, subject, text });
+  await transporter.sendMail({
+    from: MAIL_FROM,
+    to: user.email,
+    subject,
+    text,
+  });
   return { delivered: true };
 }
 
@@ -456,7 +738,12 @@ async function createEmailOtpChallenge(user) {
     consumedAt: null,
   };
   const challenges = readJson(FILES.emailOtpChallenges, []);
-  const activeChallenges = challenges.filter((item) => item.userId !== user.id || item.consumedAt || new Date(item.expiresAt).getTime() <= Date.now());
+  const activeChallenges = challenges.filter(
+    (item) =>
+      item.userId !== user.id ||
+      item.consumedAt ||
+      new Date(item.expiresAt).getTime() <= Date.now(),
+  );
   activeChallenges.push(challenge);
   writeJson(FILES.emailOtpChallenges, activeChallenges);
 
@@ -499,17 +786,25 @@ function validateEmail(email) {
 function requireAuth(req, res, next) {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
-  if (!token) return res.status(401).json({ message: "Authentication token is required." });
+  if (!token)
+    return res
+      .status(401)
+      .json({ message: "Authentication token is required." });
 
   try {
     const payload = jwt.verify(token, JWT_SECRET);
     const sessions = readJson(FILES.sessions, []);
-    const session = sessions.find((item) => item.id === payload.sessionId && !item.revokedAt);
+    const session = sessions.find(
+      (item) => item.id === payload.sessionId && !item.revokedAt,
+    );
     if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
       return res.status(401).json({ message: "Session expired or revoked." });
     }
     const user = readUsers().find((item) => item.id === payload.id);
-    if (!user) return res.status(401).json({ message: "User session is no longer valid." });
+    if (!user)
+      return res
+        .status(401)
+        .json({ message: "User session is no longer valid." });
     req.user = user;
     req.sessionId = payload.sessionId;
     next();
@@ -521,7 +816,9 @@ function requireAuth(req, res, next) {
 function requireRoles(...allowedRoles) {
   return (req, res, next) => {
     if (!allowedRoles.includes(normalizeRole(req.user.role))) {
-      return res.status(403).json({ message: "You are not authorized to access this feature." });
+      return res
+        .status(403)
+        .json({ message: "You are not authorized to access this feature." });
     }
     next();
   };
@@ -529,14 +826,18 @@ function requireRoles(...allowedRoles) {
 
 function canManageBranch(user, branchId) {
   const role = normalizeRole(user.role);
-  return role === "super_admin" || (role === "branch_admin" && user.branchId === branchId);
+  return (
+    role === "super_admin" ||
+    (role === "branch_admin" && user.branchId === branchId)
+  );
 }
 
 function scopedUsersFor(user) {
   const role = normalizeRole(user.role);
   const users = readUsers();
   if (role === "super_admin") return users;
-  if (role === "branch_admin") return users.filter((item) => item.branchId === user.branchId);
+  if (role === "branch_admin")
+    return users.filter((item) => item.branchId === user.branchId);
   return users.filter((item) => item.id === user.id);
 }
 
@@ -584,7 +885,9 @@ function distanceMeters(start, end) {
   const deltaLon = toRadians(end.longitude - start.longitude);
   const lat1 = toRadians(start.latitude);
   const lat2 = toRadians(end.latitude);
-  const a = Math.sin(deltaLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) ** 2;
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) ** 2;
   return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
@@ -613,7 +916,11 @@ function canSeeCalendarEvent(user, event) {
   if (role === "super_admin") return true;
   if (event.scope === "company") return true;
   if (event.scope === "branch") return event.branchId === user.branchId;
-  return event.employeeId === user.id || event.studentId === user.id || event.createdBy === user.id;
+  return (
+    event.employeeId === user.id ||
+    event.studentId === user.id ||
+    event.createdBy === user.id
+  );
 }
 
 function calendarEventView(event, users, branches) {
@@ -634,7 +941,10 @@ function birthdayEventsFor(users) {
   const today = todayKey();
   const year = today.slice(0, 4);
   return users
-    .filter((user) => user.dob && ["employee", "student"].includes(normalizeRole(user.role)))
+    .filter(
+      (user) =>
+        user.dob && ["employee", "student"].includes(normalizeRole(user.role)),
+    )
     .map((user) => ({
       id: `birthday-${user.id}-${year}`,
       title: `Happy Birthday ${user.name}!`,
@@ -660,37 +970,80 @@ function calendarNotificationsFor(events) {
   const limitKey = limit.toISOString().slice(0, 10);
   return events
     .filter((event) => event.startDate >= today && event.startDate <= limitKey)
-    .sort((a, b) => `${a.startDate}${a.startTime || ""}`.localeCompare(`${b.startDate}${b.startTime || ""}`))
+    .sort((a, b) =>
+      `${a.startDate}${a.startTime || ""}`.localeCompare(
+        `${b.startDate}${b.startTime || ""}`,
+      ),
+    )
     .slice(0, 6);
 }
 
 function monthlyReportFor(user, month = monthKey()) {
-  const users = scopedUsersFor(user).filter((item) => ASSIGNABLE_ROLES.includes(normalizeRole(item.role)));
+  const users = scopedUsersFor(user).filter((item) =>
+    ASSIGNABLE_ROLES.includes(normalizeRole(item.role)),
+  );
   const userIds = new Set(users.map((item) => item.id));
-  const attendance = readJson(FILES.attendance, []).filter((item) => userIds.has(item.userId) && withinMonth(item.date, month));
+  const attendance = readJson(FILES.attendance, []).filter(
+    (item) => userIds.has(item.userId) && withinMonth(item.date, month),
+  );
   const tasks = readJson(FILES.tasks, []);
-  const assignments = readJson(FILES.taskAssignments, []).filter((item) => userIds.has(item.userId));
-  const leaves = readJson(FILES.leaves, []).filter((item) => userIds.has(item.userId) && (withinMonth(item.fromDate, month) || withinMonth(item.toDate, month)));
-  const payroll = readJson(FILES.payroll, []).filter((item) => userIds.has(item.userId) && item.month === month);
-  const monthAssignments = assignments.filter((item) => withinMonth(item.assignedAt, month) || withinMonth(item.updatedAt, month));
+  const assignments = readJson(FILES.taskAssignments, []).filter((item) =>
+    userIds.has(item.userId),
+  );
+  const leaves = readJson(FILES.leaves, []).filter(
+    (item) =>
+      userIds.has(item.userId) &&
+      (withinMonth(item.fromDate, month) || withinMonth(item.toDate, month)),
+  );
+  const payroll = readJson(FILES.payroll, []).filter(
+    (item) => userIds.has(item.userId) && item.month === month,
+  );
+  const monthAssignments = assignments.filter(
+    (item) =>
+      withinMonth(item.assignedAt, month) || withinMonth(item.updatedAt, month),
+  );
   const rows = users.map((employee) => {
-    const employeeAttendance = attendance.filter((item) => item.userId === employee.id);
-    const employeeTasks = monthAssignments.filter((item) => item.userId === employee.id);
-    const completedTasks = employeeTasks.filter((item) => item.status === "completed").length;
+    const employeeAttendance = attendance.filter(
+      (item) => item.userId === employee.id,
+    );
+    const employeeTasks = monthAssignments.filter(
+      (item) => item.userId === employee.id,
+    );
+    const completedTasks = employeeTasks.filter(
+      (item) => item.status === "completed",
+    ).length;
     const totalTasks = employeeTasks.length;
-    const completionRate = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    const completionRate = totalTasks
+      ? Math.round((completedTasks / totalTasks) * 100)
+      : 0;
     return {
       employeeId: employee.id,
       employeeName: employee.name,
       role: normalizeRole(employee.role),
       branchId: employee.branchId,
       attendanceDays: employeeAttendance.length,
-      attendancePercentage: Math.min(100, Math.round((employeeAttendance.filter((item) => item.status === "present").length / 22) * 100)),
+      attendancePercentage: Math.min(
+        100,
+        Math.round(
+          (employeeAttendance.filter((item) => item.status === "present")
+            .length /
+            22) *
+            100,
+        ),
+      ),
       completedTasks,
       totalTasks,
       completionRate,
-      averageProgress: totalTasks ? Math.round(employeeTasks.reduce((sum, item) => sum + Number(item.progress || 0), 0) / totalTasks) : 0,
-      leaveRequests: leaves.filter((item) => item.userId === employee.id).length,
+      averageProgress: totalTasks
+        ? Math.round(
+            employeeTasks.reduce(
+              (sum, item) => sum + Number(item.progress || 0),
+              0,
+            ) / totalTasks,
+          )
+        : 0,
+      leaveRequests: leaves.filter((item) => item.userId === employee.id)
+        .length,
       netPay: payroll.find((item) => item.userId === employee.id)?.netPay || 0,
     };
   });
@@ -702,13 +1055,22 @@ function monthlyReportFor(user, month = monthKey()) {
       students: rows.filter((row) => row.role === "student").length,
       attendanceRecords: attendance.length,
       assignedTasks: monthAssignments.length,
-      completedTasks: monthAssignments.filter((item) => item.status === "completed").length,
+      completedTasks: monthAssignments.filter(
+        (item) => item.status === "completed",
+      ).length,
       leaveRequests: leaves.length,
       payrollProcessed: payroll.length,
-      payrollNetPay: payroll.reduce((sum, item) => sum + Number(item.netPay || 0), 0),
+      payrollNetPay: payroll.reduce(
+        (sum, item) => sum + Number(item.netPay || 0),
+        0,
+      ),
       overdueTasks: monthAssignments.filter((item) => {
         const task = tasks.find((record) => record.id === item.taskId);
-        return task?.deadline && task.deadline < todayKey() && item.status !== "completed";
+        return (
+          task?.deadline &&
+          task.deadline < todayKey() &&
+          item.status !== "completed"
+        );
       }).length,
     },
     rows,
@@ -721,16 +1083,44 @@ function escapeCsv(value) {
 
 function monthlyReportCsv(report) {
   const lines = [
-    ["Name", "Role", "Attendance Days", "Attendance %", "Completed Tasks", "Total Tasks", "Completion Rate", "Average Progress", "Leave Requests", "Net Pay"].map(escapeCsv).join(","),
+    [
+      "Name",
+      "Role",
+      "Attendance Days",
+      "Attendance %",
+      "Completed Tasks",
+      "Total Tasks",
+      "Completion Rate",
+      "Average Progress",
+      "Leave Requests",
+      "Net Pay",
+    ]
+      .map(escapeCsv)
+      .join(","),
     ...report.rows.map((row) =>
-      [row.employeeName, row.role, row.attendanceDays, `${row.attendancePercentage}%`, row.completedTasks, row.totalTasks, `${row.completionRate}%`, `${row.averageProgress}%`, row.leaveRequests, row.netPay].map(escapeCsv).join(",")
+      [
+        row.employeeName,
+        row.role,
+        row.attendanceDays,
+        `${row.attendancePercentage}%`,
+        row.completedTasks,
+        row.totalTasks,
+        `${row.completionRate}%`,
+        `${row.averageProgress}%`,
+        row.leaveRequests,
+        row.netPay,
+      ]
+        .map(escapeCsv)
+        .join(","),
     ),
   ];
   return lines.join("\n");
 }
 
 function simplePdf(title, lines) {
-  const safeLines = [title, "", ...lines].map((line) => String(line).replace(/[()\\]/g, "\\$&"));
+  const safeLines = [title, "", ...lines].map((line) =>
+    String(line).replace(/[()\\]/g, "\\$&"),
+  );
   const content = `BT /F1 13 Tf 50 770 Td ${safeLines.map((line, index) => `${index ? "0 -18 Td " : ""}(${line}) Tj`).join(" ")} ET`;
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
@@ -746,7 +1136,10 @@ function simplePdf(title, lines) {
     pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
   });
   const xref = Buffer.byteLength(pdf);
-  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.slice(1).map((offset) => `${String(offset).padStart(10, "0")} 00000 n `).join("\n")}\n`;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets
+    .slice(1)
+    .map((offset) => `${String(offset).padStart(10, "0")} 00000 n `)
+    .join("\n")}\n`;
   pdf += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
   return Buffer.from(pdf);
 }
@@ -764,16 +1157,26 @@ function payrollPeriod(month) {
 }
 
 function payrollPeriodRange(month) {
-  const [yearValue, monthValue] = String(month || "").split("-").map(Number);
-  if (!yearValue || !monthValue) return { from: month || "-", to: month || "-", label: month || "-" };
+  const [yearValue, monthValue] = String(month || "")
+    .split("-")
+    .map(Number);
+  if (!yearValue || !monthValue)
+    return { from: month || "-", to: month || "-", label: month || "-" };
   const startDate = new Date(Date.UTC(yearValue, monthValue - 1, 1));
   const monthEndDate = new Date(Date.UTC(yearValue, monthValue, 0));
-  const endDate = new Date(Date.UTC(yearValue, monthValue - 1, Math.min(30, monthEndDate.getUTCDate())));
-  const formatDate = (date) => [
-    String(date.getUTCDate()).padStart(2, "0"),
-    String(date.getUTCMonth() + 1).padStart(2, "0"),
-    date.getUTCFullYear(),
-  ].join("-");
+  const endDate = new Date(
+    Date.UTC(
+      yearValue,
+      monthValue - 1,
+      Math.min(30, monthEndDate.getUTCDate()),
+    ),
+  );
+  const formatDate = (date) =>
+    [
+      String(date.getUTCDate()).padStart(2, "0"),
+      String(date.getUTCMonth() + 1).padStart(2, "0"),
+      date.getUTCFullYear(),
+    ].join("-");
   const from = formatDate(startDate);
   const to = formatDate(endDate);
   return { from, to, label: `${from} to ${to}` };
@@ -786,14 +1189,25 @@ function payrollCalculations(row) {
   const bonus = Number(row.bonus ?? row.bonuses ?? 0);
   const specialAllowance = Number(row.specialAllowance ?? 0);
   const otherEarnings = Number(row.otherEarnings ?? 0);
-  const grossSalary = basicSalary + hra + incentivePay + bonus + specialAllowance + otherEarnings;
-  const providentFund = Number(row.providentFund ?? Math.round(basicSalary * 0.12));
-  const esi = Number(row.esi ?? (grossSalary <= 21000 ? Math.round(grossSalary * 0.0075) : 0));
+  const grossSalary =
+    basicSalary + hra + incentivePay + bonus + specialAllowance + otherEarnings;
+  const providentFund = Number(
+    row.providentFund ?? Math.round(basicSalary * 0.12),
+  );
+  const esi = Number(
+    row.esi ?? (grossSalary <= 21000 ? Math.round(grossSalary * 0.0075) : 0),
+  );
   const professionalTax = Number(row.professionalTax ?? 0);
   const salaryAdvance = Number(row.salaryAdvance ?? 0);
   const loan = Number(row.loan ?? 0);
   const otherDeductions = Number(row.otherDeductions ?? 0);
-  const totalDeductions = providentFund + esi + professionalTax + salaryAdvance + loan + otherDeductions;
+  const totalDeductions =
+    providentFund +
+    esi +
+    professionalTax +
+    salaryAdvance +
+    loan +
+    otherDeductions;
   const netSalary = grossSalary - totalDeductions;
   return {
     basicSalary,
@@ -815,9 +1229,13 @@ function payrollCalculations(row) {
 }
 
 function attendanceSummaryFor(userId, month) {
-  const attendance = readJson(FILES.attendance, []).filter((item) => item.userId === userId && String(item.date || "").startsWith(month));
+  const attendance = readJson(FILES.attendance, []).filter(
+    (item) =>
+      item.userId === userId && String(item.date || "").startsWith(month),
+  );
   const workingDays = 26;
-  const presentDays = attendance.filter((item) => item.status === "present").length || 24;
+  const presentDays =
+    attendance.filter((item) => item.status === "present").length || 24;
   const absentDays = Math.max(0, workingDays - presentDays - 1);
   const leaveDays = Math.max(0, workingDays - presentDays - absentDays);
   return {
@@ -830,7 +1248,8 @@ function attendanceSummaryFor(userId, month) {
 }
 
 function normalizeMongoPayrollRow(payroll) {
-  const row = typeof payroll.toObject === "function" ? payroll.toObject() : payroll;
+  const row =
+    typeof payroll.toObject === "function" ? payroll.toObject() : payroll;
   return {
     ...row,
     id: String(row._id || row.id || ""),
@@ -865,11 +1284,15 @@ function paethPredictor(left, up, upLeft) {
 
 function readPngLogo() {
   const logoPath = PAYSLIP_LOGO_PATHS.find((file) => existsSync(file));
-  if (!logoPath) throw new Error("Payslip logo image not found. Expected /assets/job-way-tech-logo.png.");
+  if (!logoPath)
+    throw new Error(
+      "Payslip logo image not found. Expected /assets/job-way-tech-logo.png.",
+    );
 
   const file = readFileSync(logoPath);
   const signature = "89504e470d0a1a0a";
-  if (file.subarray(0, 8).toString("hex") !== signature) throw new Error("Payslip logo must be a PNG image.");
+  if (file.subarray(0, 8).toString("hex") !== signature)
+    throw new Error("Payslip logo must be a PNG image.");
 
   let offset = 8;
   let width = 0;
@@ -897,7 +1320,9 @@ function readPngLogo() {
   }
 
   if (bitDepth !== 8 || interlace !== 0 || ![0, 2, 6].includes(colorType)) {
-    throw new Error("Payslip logo PNG must be non-interlaced 8-bit grayscale, RGB, or RGBA.");
+    throw new Error(
+      "Payslip logo PNG must be non-interlaced 8-bit grayscale, RGB, or RGBA.",
+    );
   }
 
   const channels = colorType === 6 ? 4 : colorType === 2 ? 3 : 1;
@@ -908,16 +1333,30 @@ function readPngLogo() {
   let inputOffset = 0;
   for (let row = 0; row < height; row += 1) {
     const filter = inflated[inputOffset];
-    if (filter > 4) throw new Error("Payslip logo PNG uses an unsupported row filter.");
+    if (filter > 4)
+      throw new Error("Payslip logo PNG uses an unsupported row filter.");
     inputOffset += 1;
     const rowOffset = row * stride;
     const prevRowOffset = rowOffset - stride;
     for (let column = 0; column < stride; column += 1) {
       const value = inflated[inputOffset + column];
-      const left = column >= bytesPerPixel ? rows[rowOffset + column - bytesPerPixel] : 0;
+      const left =
+        column >= bytesPerPixel ? rows[rowOffset + column - bytesPerPixel] : 0;
       const up = row > 0 ? rows[prevRowOffset + column] : 0;
-      const upLeft = row > 0 && column >= bytesPerPixel ? rows[prevRowOffset + column - bytesPerPixel] : 0;
-      const predictor = filter === 1 ? left : filter === 2 ? up : filter === 3 ? Math.floor((left + up) / 2) : filter === 4 ? paethPredictor(left, up, upLeft) : 0;
+      const upLeft =
+        row > 0 && column >= bytesPerPixel
+          ? rows[prevRowOffset + column - bytesPerPixel]
+          : 0;
+      const predictor =
+        filter === 1
+          ? left
+          : filter === 2
+            ? up
+            : filter === 3
+              ? Math.floor((left + up) / 2)
+              : filter === 4
+                ? paethPredictor(left, up, upLeft)
+                : 0;
       rows[rowOffset + column] = (value + predictor) & 255;
     }
     inputOffset += stride;
@@ -938,8 +1377,12 @@ function readPngLogo() {
     } else {
       const alpha = rows[source + 3] / 255;
       rgb[target] = Math.round(rows[source] * alpha + 255 * (1 - alpha));
-      rgb[target + 1] = Math.round(rows[source + 1] * alpha + 255 * (1 - alpha));
-      rgb[target + 2] = Math.round(rows[source + 2] * alpha + 255 * (1 - alpha));
+      rgb[target + 1] = Math.round(
+        rows[source + 1] * alpha + 255 * (1 - alpha),
+      );
+      rgb[target + 2] = Math.round(
+        rows[source + 2] * alpha + 255 * (1 - alpha),
+      );
     }
   }
 
@@ -952,29 +1395,105 @@ function modernPayslipPdf({ row, user, branch }) {
   const period = payrollPeriodRange(row.month);
   const logo = readPngLogo();
   const logoBox = 58;
-  const logoWidth = logo.width >= logo.height ? logoBox : Math.round((logo.width / logo.height) * logoBox);
-  const logoHeight = logo.height >= logo.width ? logoBox : Math.round((logo.height / logo.width) * logoBox);
+  const logoWidth =
+    logo.width >= logo.height
+      ? logoBox
+      : Math.round((logo.width / logo.height) * logoBox);
+  const logoHeight =
+    logo.height >= logo.width
+      ? logoBox
+      : Math.round((logo.height / logo.width) * logoBox);
   const logoX = 50;
   const logoY = 694;
   const payroll = readJson(FILES.payroll, []);
   const ytdNetSalary = payroll
-    .filter((item) => item.userId === row.userId && String(item.month || "").startsWith(String(row.month).slice(0, 4)))
-    .reduce((total, item) => total + payrollCalculations(item).netSalary, calc.netSalary);
+    .filter(
+      (item) =>
+        item.userId === row.userId &&
+        String(item.month || "").startsWith(String(row.month).slice(0, 4)),
+    )
+    .reduce(
+      (total, item) => total + payrollCalculations(item).netSalary,
+      calc.netSalary,
+    );
   const monthDate = new Date(`${row.month || "2026-05"}-01T00:00:00.000Z`);
-  const payslipMonth = Number.isNaN(monthDate.getTime()) ? row.month : monthDate.toLocaleDateString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
+  const payslipMonth = Number.isNaN(monthDate.getTime())
+    ? row.month
+    : monthDate.toLocaleDateString("en-IN", {
+        month: "long",
+        year: "numeric",
+        timeZone: "UTC",
+      });
   const paymentDate = Number.isNaN(monthDate.getTime())
     ? "-"
-    : new Date(Date.UTC(monthDate.getUTCFullYear(), monthDate.getUTCMonth() + 1, 1)).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" });
+    : new Date(
+        Date.UTC(monthDate.getUTCFullYear(), monthDate.getUTCMonth() + 1, 1),
+      ).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+        timeZone: "UTC",
+      });
   const rangeDate = (value) => {
-    const [day, month, year] = String(value || "").split("-").map(Number);
+    const [day, month, year] = String(value || "")
+      .split("-")
+      .map(Number);
     if (!day || !month || !year) return value || "-";
-    return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" });
+    return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString(
+      "en-IN",
+      { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" },
+    );
   };
-  const amount = (value) => new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(Math.round(Number(value) || 0));
-  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
-  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-  const belowHundred = (value) => value < 20 ? ones[value] : [tens[Math.floor(value / 10)], ones[value % 10]].filter(Boolean).join(" ");
-  const belowThousand = (value) => value >= 100 ? [ones[Math.floor(value / 100)], "Hundred", belowHundred(value % 100)].filter(Boolean).join(" ") : belowHundred(value);
+  const amount = (value) =>
+    new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(
+      Math.round(Number(value) || 0),
+    );
+  const ones = [
+    "",
+    "One",
+    "Two",
+    "Three",
+    "Four",
+    "Five",
+    "Six",
+    "Seven",
+    "Eight",
+    "Nine",
+    "Ten",
+    "Eleven",
+    "Twelve",
+    "Thirteen",
+    "Fourteen",
+    "Fifteen",
+    "Sixteen",
+    "Seventeen",
+    "Eighteen",
+    "Nineteen",
+  ];
+  const tens = [
+    "",
+    "",
+    "Twenty",
+    "Thirty",
+    "Forty",
+    "Fifty",
+    "Sixty",
+    "Seventy",
+    "Eighty",
+    "Ninety",
+  ];
+  const belowHundred = (value) =>
+    value < 20
+      ? ones[value]
+      : [tens[Math.floor(value / 10)], ones[value % 10]]
+          .filter(Boolean)
+          .join(" ");
+  const belowThousand = (value) =>
+    value >= 100
+      ? [ones[Math.floor(value / 100)], "Hundred", belowHundred(value % 100)]
+          .filter(Boolean)
+          .join(" ")
+      : belowHundred(value);
   const words = (value) => {
     const rounded = Math.round(Number(value) || 0);
     if (!rounded) return "Zero";
@@ -983,13 +1502,23 @@ function modernPayslipPdf({ row, user, branch }) {
       [Math.floor((rounded % 10000000) / 100000), "Lakh"],
       [Math.floor((rounded % 100000) / 1000), "Thousand"],
       [rounded % 1000, ""],
-    ].map(([part, label]) => part ? `${belowThousand(part)}${label ? ` ${label}` : ""}` : "").filter(Boolean).join(" ");
+    ]
+      .map(([part, label]) =>
+        part ? `${belowThousand(part)}${label ? ` ${label}` : ""}` : "",
+      )
+      .filter(Boolean)
+      .join(" ");
   };
 
   const commands = [];
-  const text = (value, x, y, size = 9, font = "F1") => commands.push(`BT /${font} ${size} Tf ${x} ${y} Td (${pdfText(value)}) Tj ET`);
-  const line = (x1, y1, x2, y2) => commands.push(`${x1} ${y1} m ${x2} ${y2} l S`);
-  const rect = (x, y, width, height, fill = false) => commands.push(`${x} ${y} ${width} ${height} re ${fill ? "f" : "S"}`);
+  const text = (value, x, y, size = 9, font = "F1") =>
+    commands.push(
+      `BT /${font} ${size} Tf ${x} ${y} Td (${pdfText(value)}) Tj ET`,
+    );
+  const line = (x1, y1, x2, y2) =>
+    commands.push(`${x1} ${y1} m ${x2} ${y2} l S`);
+  const rect = (x, y, width, height, fill = false) =>
+    commands.push(`${x} ${y} ${width} ${height} re ${fill ? "f" : "S"}`);
   const blueFill = () => commands.push("0.03 0.25 0.53 rg");
   const blueStroke = () => commands.push("0.03 0.25 0.53 RG 1 w");
   const grayStroke = () => commands.push("0 0 0 rg 0.61 0.64 0.69 RG 0.7 w");
@@ -1016,18 +1545,41 @@ function modernPayslipPdf({ row, user, branch }) {
 
   blueStroke();
   rect(34, 682, 544, 86);
-  commands.push(`q ${logoWidth} 0 0 ${logoHeight} ${logoX} ${logoY} cm /Logo Do Q`);
+  commands.push(
+    `q ${logoWidth} 0 0 ${logoHeight} ${logoX} ${logoY} cm /Logo Do Q`,
+  );
   black();
   text("JOB WAY TECH CONSULTANT & TRAINING", 156, 742, 16, "F2");
   text("Monthly Salary Slip / Payslip", 232, 723, 11, "F2");
-  text("Address: 429-A-24, Indira Nagar, Krishna Nagar, Madanapalle,", 190, 708, 7);
+  text(
+    "Address: 429-A-24, Indira Nagar, Krishna Nagar, Madanapalle,",
+    190,
+    708,
+    7,
+  );
   text("Andhra Pradesh - 517325", 258, 698, 7);
   text(payslipMonth, 520, 724, 9, "F2");
 
   infoCell("Payslip Month", payslipMonth, 34, 640, 272);
-  infoCell("Pay Period", `${rangeDate(period.from)} to ${rangeDate(period.to)}`, 306, 640, 272);
+  infoCell(
+    "Pay Period",
+    `${rangeDate(period.from)} to ${rangeDate(period.to)}`,
+    306,
+    640,
+    272,
+  );
   infoCell("Salary Payment Date", paymentDate, 34, 616, 272);
-  infoCell("Payslip No.", `JWT/PAY/${String(row.month || "").replace("-", "")}/${String(row.id || row.userId || "").slice(0, 5).toUpperCase()}`, 306, 616, 272);
+  infoCell(
+    "Payslip No.",
+    `JWT/PAY/${String(row.month || "").replace("-", "")}/${String(
+      row.id || row.userId || "",
+    )
+      .slice(0, 5)
+      .toUpperCase()}`,
+    306,
+    616,
+    272,
+  );
   infoCell("Payment Mode", "Bank Transfer", 34, 592, 544);
 
   blueFill();
@@ -1035,12 +1587,42 @@ function modernPayslipPdf({ row, user, branch }) {
   white();
   text("EMPLOYEE DETAILS", 46, 562, 10, "F2");
   [
-    [["Employee Name", user?.name || "Mr./Ms. Sample Employee"], ["Employee ID", user?.employeeId || row.userId || "JWT/EMP/001"]],
-    [["Designation", user?.designation || user?.role || "HR Executive"], ["Department", user?.department || "Human Resources"]],
-    [["Date of Joining", user?.createdAt ? new Date(user.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" }) : "-"], ["Work Location", branch?.name || "Madanapalle"]],
-    [["Employment Type", "Full Time"], ["PAN Number", "ABCDE1234F"]],
-    [["Bank Name", "HDFC Bank"], ["Bank Account No", "XXXXXX1234"]],
-    [["Total Month Days", String(attendance.workingDays || 31)], ["Paid Days", String(attendance.presentDays || attendance.workingDays || 31)]],
+    [
+      ["Employee Name", user?.name || "Mr./Ms. Sample Employee"],
+      ["Employee ID", user?.employeeId || row.userId || "JWT/EMP/001"],
+    ],
+    [
+      ["Designation", user?.designation || user?.role || "HR Executive"],
+      ["Department", user?.department || "Human Resources"],
+    ],
+    [
+      [
+        "Date of Joining",
+        user?.createdAt
+          ? new Date(user.createdAt).toLocaleDateString("en-IN", {
+              day: "2-digit",
+              month: "long",
+              year: "numeric",
+            })
+          : "-",
+      ],
+      ["Work Location", branch?.name || "Madanapalle"],
+    ],
+    [
+      ["Employment Type", "Full Time"],
+      ["PAN Number", "ABCDE1234F"],
+    ],
+    [
+      ["Bank Name", "HDFC Bank"],
+      ["Bank Account No", "XXXXXX1234"],
+    ],
+    [
+      ["Total Month Days", String(attendance.workingDays || 31)],
+      [
+        "Paid Days",
+        String(attendance.presentDays || attendance.workingDays || 31),
+      ],
+    ],
   ].forEach((pair, index) => {
     const y = 530 - index * 24;
     infoCell(pair[0][0], pair[0][1], 34, y, 272);
@@ -1111,7 +1693,13 @@ function modernPayslipPdf({ row, user, branch }) {
   commands.push("0.61 0.64 0.69 RG 0.7 w [3 3] 0 d");
   line(34, 70, 578, 70);
   commands.push("[] 0 d");
-  text("This is a system-generated payslip and does not require a physical signature.", 144, 46, 8, "F2");
+  text(
+    "This is a system-generated payslip and does not require a physical signature.",
+    144,
+    46,
+    8,
+    "F2",
+  );
 
   const content = commands.join("\n");
   const parts = [Buffer.from("%PDF-1.4\n")];
@@ -1131,7 +1719,10 @@ function modernPayslipPdf({ row, user, branch }) {
 
   addObject(1, "<< /Type /Catalog /Pages 2 0 R >>");
   addObject(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
-  addObject(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> /XObject << /Logo 6 0 R >> >> /Contents 7 0 R >>");
+  addObject(
+    3,
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> /XObject << /Logo 6 0 R >> >> /Contents 7 0 R >>",
+  );
   addObject(4, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
   addObject(5, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>");
   addObject(
@@ -1140,17 +1731,24 @@ function modernPayslipPdf({ row, user, branch }) {
     logo.data,
     "\nendstream",
   );
-  addObject(7, `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`);
+  addObject(
+    7,
+    `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`,
+  );
 
   const xref = byteLength;
-  addPart(`xref\n0 8\n0000000000 65535 f \n${offsets.map((offset) => `${String(offset).padStart(10, "0")} 00000 n `).join("\n")}\n`);
+  addPart(
+    `xref\n0 8\n0000000000 65535 f \n${offsets.map((offset) => `${String(offset).padStart(10, "0")} 00000 n `).join("\n")}\n`,
+  );
   addPart(`trailer << /Size 8 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
   return Buffer.concat(parts);
 }
 
 function imageSignature(imageData) {
   if (!imageData) return "not-enrolled";
-  const sample = String(imageData).replace(/^data:image\/\w+;base64,/, "").slice(0, 16000);
+  const sample = String(imageData)
+    .replace(/^data:image\/\w+;base64,/, "")
+    .slice(0, 16000);
   let hash = 0;
   for (let index = 0; index < sample.length; index += 1) {
     hash = (hash * 31 + sample.charCodeAt(index)) >>> 0;
@@ -1160,14 +1758,26 @@ function imageSignature(imageData) {
 
 function verifyDemoFace(user, signature) {
   const faceProfiles = readJson(FILES.faceProfiles, []);
-  const duplicate = faceProfiles.find((profile) => profile.signature === signature && profile.userId !== user.id);
+  const duplicate = faceProfiles.find(
+    (profile) => profile.signature === signature && profile.userId !== user.id,
+  );
   if (duplicate) {
-    return { ok: false, message: "This face profile is already enrolled for another account." };
+    return {
+      ok: false,
+      message: "This face profile is already enrolled for another account.",
+    };
   }
 
   const profile = faceProfiles.find((item) => item.userId === user.id);
   if (!profile) {
-    faceProfiles.push({ id: randomUUID(), userId: user.id, role: normalizeRole(user.role), signature, enrolledAt: new Date().toISOString(), lastVerifiedAt: new Date().toISOString() });
+    faceProfiles.push({
+      id: randomUUID(),
+      userId: user.id,
+      role: normalizeRole(user.role),
+      signature,
+      enrolledAt: new Date().toISOString(),
+      lastVerifiedAt: new Date().toISOString(),
+    });
     writeJson(FILES.faceProfiles, faceProfiles);
     return { ok: true, enrolled: true };
   }
@@ -1183,12 +1793,17 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.get("/api/config", (_req, res) => {
-  res.json({ googleClientId: GOOGLE_CLIENT_ID, roles: ROLES.map((id) => ({ id, label: ROLE_LABELS[id] })) });
+  res.json({
+    googleClientId: GOOGLE_CLIENT_ID,
+    roles: ROLES.map((id) => ({ id, label: ROLE_LABELS[id] })),
+  });
 });
 
 app.post("/api/register", async (req, res) => {
   const name = String(req.body.name || "").trim();
-  const email = String(req.body.email || "").trim().toLowerCase();
+  const email = String(req.body.email || "")
+    .trim()
+    .toLowerCase();
   const password = String(req.body.password || "");
   const role = String(req.body.role || "");
   const branchId = req.body.branchId || null;
@@ -1198,15 +1813,31 @@ app.post("/api/register", async (req, res) => {
   const salary = Number(req.body.salary || 0);
 
   if (!name) return res.status(400).json({ message: "Full name is required." });
-  if (!validateEmail(email)) return res.status(400).json({ message: "Enter a valid email address." });
-  if (password.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters." });
-  if (!validRole(role)) return res.status(400).json({ message: "Choose a valid role." });
-  if (role !== "super_admin" && !branchId) return res.status(400).json({ message: "Branch is required for this role." });
-  if (dob && Number.isNaN(new Date(dob).getTime())) return res.status(400).json({ message: "Enter a valid DOB." });
-  if (branchId && !readJson(FILES.branches, []).some((branch) => branch.id === branchId)) return res.status(400).json({ message: "Selected branch was not found." });
+  if (!validateEmail(email))
+    return res.status(400).json({ message: "Enter a valid email address." });
+  if (password.length < 6)
+    return res
+      .status(400)
+      .json({ message: "Password must be at least 6 characters." });
+  if (!validRole(role))
+    return res.status(400).json({ message: "Choose a valid role." });
+  if (role !== "super_admin" && !branchId)
+    return res
+      .status(400)
+      .json({ message: "Branch is required for this role." });
+  if (dob && Number.isNaN(new Date(dob).getTime()))
+    return res.status(400).json({ message: "Enter a valid DOB." });
+  if (
+    branchId &&
+    !readJson(FILES.branches, []).some((branch) => branch.id === branchId)
+  )
+    return res.status(400).json({ message: "Selected branch was not found." });
 
   const users = readUsers();
-  if (users.some((user) => user.email === email)) return res.status(409).json({ message: "This email is already registered." });
+  if (users.some((user) => user.email === email))
+    return res
+      .status(409)
+      .json({ message: "This email is already registered." });
 
   const newUser = {
     id: randomUUID(),
@@ -1218,13 +1849,20 @@ app.post("/api/register", async (req, res) => {
     phone,
     dob,
     profile,
-    employeeId: STAFF_ROLES.includes(role) ? `EMP-${String(users.length + 1001).padStart(4, "0")}` : undefined,
-    studentId: role === "student" ? `STU-${String(users.length + 2001).padStart(4, "0")}` : undefined,
+    employeeId: STAFF_ROLES.includes(role)
+      ? `EMP-${String(users.length + 1001).padStart(4, "0")}`
+      : undefined,
+    studentId:
+      role === "student"
+        ? `STU-${String(users.length + 2001).padStart(4, "0")}`
+        : undefined,
     salary: STAFF_ROLES.includes(role) ? salary : undefined,
     provider: "password",
     twoFactorEnabled: false,
     twoFactorSecret: null,
-    faceSignature: ["employee", "student"].includes(role) ? "not-enrolled" : undefined,
+    faceSignature: ["employee", "student"].includes(role)
+      ? "not-enrolled"
+      : undefined,
     createdAt: new Date().toISOString(),
   };
 
@@ -1234,25 +1872,56 @@ app.post("/api/register", async (req, res) => {
 });
 
 app.post("/api/login", async (req, res) => {
-  const email = String(req.body.email || "").trim().toLowerCase();
+  const email = String(req.body.email || "")
+    .trim()
+    .toLowerCase();
   const password = String(req.body.password || "");
   const requestedRole = req.body.role ? String(req.body.role) : null;
   const user = readUsers().find((item) => item.email === email);
 
-  if (!user?.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) {
-    await recordLoginAttempt(req, email, "failed", "Invalid email or password.", requestedRole || "");
+  if (
+    !user?.passwordHash ||
+    !(await bcrypt.compare(password, user.passwordHash))
+  ) {
+    await recordLoginAttempt(
+      req,
+      email,
+      "failed",
+      "Invalid email or password.",
+      requestedRole || "",
+    );
     return res.status(401).json({ message: "Invalid email or password." });
   }
   if (requestedRole && !validRole(requestedRole)) {
-    await recordLoginAttempt(req, email, "failed", "Invalid role selected.", requestedRole);
+    await recordLoginAttempt(
+      req,
+      email,
+      "failed",
+      "Invalid role selected.",
+      requestedRole,
+    );
     return res.status(400).json({ message: "Choose a valid role." });
   }
   if (requestedRole && normalizeRole(user.role) !== requestedRole) {
-    await recordLoginAttempt(req, email, "failed", "Role mismatch.", requestedRole);
-    return res.status(403).json({ message: `This account is registered as ${ROLE_LABELS[normalizeRole(user.role)]}.` });
+    await recordLoginAttempt(
+      req,
+      email,
+      "failed",
+      "Role mismatch.",
+      requestedRole,
+    );
+    return res.status(403).json({
+      message: `This account is registered as ${ROLE_LABELS[normalizeRole(user.role)]}.`,
+    });
   }
 
-  await recordLoginAttempt(req, email, "success", "Login successful.", normalizeRole(user.role));
+  await recordLoginAttempt(
+    req,
+    email,
+    "success",
+    "Login successful.",
+    normalizeRole(user.role),
+  );
   res.json(await authResponseFor(user));
 });
 
@@ -1265,10 +1934,15 @@ app.post("/api/logout", requireAuth, (req, res) => {
 });
 
 app.post("/api/forgot-password", (req, res) => {
-  const email = String(req.body.email || "").trim().toLowerCase();
+  const email = String(req.body.email || "")
+    .trim()
+    .toLowerCase();
   const users = readUsers();
   const user = users.find((item) => item.email === email);
-  if (!user) return res.json({ message: "If this email exists, a reset token has been generated." });
+  if (!user)
+    return res.json({
+      message: "If this email exists, a reset token has been generated.",
+    });
   const resetTokens = readJson(FILES.resetTokens, []);
   const token = randomBytes(24).toString("hex");
   resetTokens.push({
@@ -1279,16 +1953,25 @@ app.post("/api/forgot-password", (req, res) => {
     usedAt: null,
   });
   writeJson(FILES.resetTokens, resetTokens);
-  res.json({ message: "Reset token generated for demo use.", resetToken: token });
+  res.json({
+    message: "Reset token generated for demo use.",
+    resetToken: token,
+  });
 });
 
 app.post("/api/reset-password", async (req, res) => {
   const token = String(req.body.token || "");
   const password = String(req.body.password || "");
-  if (password.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters." });
+  if (password.length < 6)
+    return res
+      .status(400)
+      .json({ message: "Password must be at least 6 characters." });
   const resetTokens = readJson(FILES.resetTokens, []);
-  const reset = resetTokens.find((item) => item.token === token && !item.usedAt);
-  if (!reset || new Date(reset.expiresAt).getTime() < Date.now()) return res.status(401).json({ message: "Invalid or expired reset token." });
+  const reset = resetTokens.find(
+    (item) => item.token === token && !item.usedAt,
+  );
+  if (!reset || new Date(reset.expiresAt).getTime() < Date.now())
+    return res.status(401).json({ message: "Invalid or expired reset token." });
   const users = readUsers();
   const user = users.find((item) => item.id === reset.userId);
   if (!user) return res.status(404).json({ message: "User not found." });
@@ -1300,15 +1983,26 @@ app.post("/api/reset-password", async (req, res) => {
 });
 
 app.post("/api/google-login", async (req, res) => {
-  if (!GOOGLE_CLIENT_ID) return res.status(500).json({ message: "Google login is not configured. Add GOOGLE_CLIENT_ID to your environment." });
+  if (!GOOGLE_CLIENT_ID)
+    return res.status(500).json({
+      message:
+        "Google login is not configured. Add GOOGLE_CLIENT_ID to your environment.",
+    });
   const credential = String(req.body.credential || "");
-  if (!credential) return res.status(400).json({ message: "Google credential is required." });
+  if (!credential)
+    return res.status(400).json({ message: "Google credential is required." });
 
   try {
-    const ticket = await googleClient.verifyIdToken({ idToken: credential, audience: GOOGLE_CLIENT_ID });
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: GOOGLE_CLIENT_ID,
+    });
     const payload = ticket.getPayload();
     const email = String(payload.email || "").toLowerCase();
-    if (!payload.email_verified) return res.status(403).json({ message: "Your Google email must be verified." });
+    if (!payload.email_verified)
+      return res
+        .status(403)
+        .json({ message: "Your Google email must be verified." });
 
     const users = readUsers();
     let user = users.find((item) => item.email === email);
@@ -1346,9 +2040,17 @@ app.post("/api/2fa/verify-login", (req, res) => {
   try {
     const payload = verifyTwoFactorToken(twoFactorToken);
     const user = readUsers().find((item) => item.id === payload.id);
-    if (!user?.twoFactorEnabled || !user.twoFactorSecret) return res.status(401).json({ message: "2FA verification is not available for this user." });
-    if (!verifySync({ token: code, secret: user.twoFactorSecret })) return res.status(401).json({ message: "Invalid authenticator code." });
-    res.json({ token: createToken(user), user: publicUser(user), requires2fa: false });
+    if (!user?.twoFactorEnabled || !user.twoFactorSecret)
+      return res
+        .status(401)
+        .json({ message: "2FA verification is not available for this user." });
+    if (!verifySync({ token: code, secret: user.twoFactorSecret }))
+      return res.status(401).json({ message: "Invalid authenticator code." });
+    res.json({
+      token: createToken(user),
+      user: publicUser(user),
+      requires2fa: false,
+    });
   } catch {
     res.status(401).json({ message: "Invalid or expired 2FA login session." });
   }
@@ -1361,16 +2063,31 @@ app.post("/api/admin-otp/verify-login", async (req, res) => {
     const payload = verifyEmailOtpToken(emailOtpToken);
     const users = readUsers();
     const user = users.find((item) => item.id === payload.id);
-    if (!user || !adminRequiresTwoFactor(user)) return res.status(401).json({ message: "Email OTP verification is not available for this account." });
+    if (!user || !adminRequiresTwoFactor(user))
+      return res.status(401).json({
+        message: "Email OTP verification is not available for this account.",
+      });
 
     const challenges = readJson(FILES.emailOtpChallenges, []);
-    const challenge = challenges.find((item) => item.id === payload.challengeId && item.userId === user.id);
-    if (!challenge || challenge.consumedAt) return res.status(401).json({ message: "Invalid or expired OTP session." });
-    if (new Date(challenge.expiresAt).getTime() < Date.now()) return res.status(401).json({ message: "OTP expired. Login again to receive a new OTP." });
-    if (challenge.attempts >= 5) return res.status(429).json({ message: "Too many OTP attempts. Login again to receive a new OTP." });
+    const challenge = challenges.find(
+      (item) => item.id === payload.challengeId && item.userId === user.id,
+    );
+    if (!challenge || challenge.consumedAt)
+      return res
+        .status(401)
+        .json({ message: "Invalid or expired OTP session." });
+    if (new Date(challenge.expiresAt).getTime() < Date.now())
+      return res
+        .status(401)
+        .json({ message: "OTP expired. Login again to receive a new OTP." });
+    if (challenge.attempts >= 5)
+      return res.status(429).json({
+        message: "Too many OTP attempts. Login again to receive a new OTP.",
+      });
 
     challenge.attempts += 1;
-    const valid = code.length === 6 && await bcrypt.compare(code, challenge.codeHash);
+    const valid =
+      code.length === 6 && (await bcrypt.compare(code, challenge.codeHash));
     if (!valid) {
       writeJson(FILES.emailOtpChallenges, challenges);
       return res.status(401).json({ message: "Invalid OTP." });
@@ -1378,7 +2095,11 @@ app.post("/api/admin-otp/verify-login", async (req, res) => {
 
     challenge.consumedAt = new Date().toISOString();
     writeJson(FILES.emailOtpChallenges, challenges);
-    res.json({ token: createToken(user), user: publicUser(user), requiresEmailOtp: false });
+    res.json({
+      token: createToken(user),
+      user: publicUser(user),
+      requiresEmailOtp: false,
+    });
   } catch {
     res.status(401).json({ message: "Invalid or expired OTP session." });
   }
@@ -1391,16 +2112,29 @@ app.post("/api/2fa/complete-required-setup", (req, res) => {
     const payload = verifyTwoFactorSetupToken(twoFactorSetupToken);
     const users = readUsers();
     const user = users.find((item) => item.id === payload.id);
-    if (!user || !adminRequiresTwoFactor(user)) return res.status(401).json({ message: "Two-step setup is not required for this account." });
-    if (!user.pendingTwoFactorSecret) return res.status(400).json({ message: "Start two-step verification setup again." });
-    if (!verifySync({ token: code, secret: user.pendingTwoFactorSecret })) return res.status(401).json({ message: "Invalid authenticator code." });
+    if (!user || !adminRequiresTwoFactor(user))
+      return res
+        .status(401)
+        .json({ message: "Two-step setup is not required for this account." });
+    if (!user.pendingTwoFactorSecret)
+      return res
+        .status(400)
+        .json({ message: "Start two-step verification setup again." });
+    if (!verifySync({ token: code, secret: user.pendingTwoFactorSecret }))
+      return res.status(401).json({ message: "Invalid authenticator code." });
     user.twoFactorSecret = user.pendingTwoFactorSecret;
     user.twoFactorEnabled = true;
     delete user.pendingTwoFactorSecret;
     writeUsers(users);
-    res.json({ token: createToken(user), user: publicUser(user), requires2fa: false });
+    res.json({
+      token: createToken(user),
+      user: publicUser(user),
+      requires2fa: false,
+    });
   } catch {
-    res.status(401).json({ message: "Invalid or expired two-step setup session." });
+    res
+      .status(401)
+      .json({ message: "Invalid or expired two-step setup session." });
   }
 });
 
@@ -1408,263 +2142,452 @@ app.get("/api/me", requireAuth, (req, res) => {
   res.json({ user: publicUser(req.user) });
 });
 
-app.get("/api/users", requireAuth, requireRoles("super_admin", "branch_admin"), (req, res) => {
-  res.json({ users: scopedUsersFor(req.user).map(publicUser) });
-});
+app.get(
+  "/api/users",
+  requireAuth,
+  requireRoles("super_admin", "branch_admin"),
+  (req, res) => {
+    res.json({ users: scopedUsersFor(req.user).map(publicUser) });
+  },
+);
 
-app.delete("/api/users/:id", requireAuth, requireRoles("super_admin", "branch_admin"), (req, res) => {
-  if (req.params.id === req.user.id) return res.status(400).json({ message: "You cannot delete the current session user." });
-  const users = readUsers();
-  const target = users.find((user) => user.id === req.params.id);
-  if (!target) return res.status(404).json({ message: "User not found." });
-  if (!canManageBranch(req.user, target.branchId)) return res.status(403).json({ message: "You cannot manage users outside your branch." });
-  const nextUsers = users.filter((user) => user.id !== req.params.id);
-  writeUsers(nextUsers);
-  res.json({ users: scopedUsersFor(req.user).filter((user) => user.id !== req.params.id).map(publicUser) });
-});
+app.delete(
+  "/api/users/:id",
+  requireAuth,
+  requireRoles("super_admin", "branch_admin"),
+  (req, res) => {
+    if (req.params.id === req.user.id)
+      return res
+        .status(400)
+        .json({ message: "You cannot delete the current session user." });
+    const users = readUsers();
+    const target = users.find((user) => user.id === req.params.id);
+    if (!target) return res.status(404).json({ message: "User not found." });
+    if (!canManageBranch(req.user, target.branchId))
+      return res
+        .status(403)
+        .json({ message: "You cannot manage users outside your branch." });
+    const nextUsers = users.filter((user) => user.id !== req.params.id);
+    writeUsers(nextUsers);
+    res.json({
+      users: scopedUsersFor(req.user)
+        .filter((user) => user.id !== req.params.id)
+        .map(publicUser),
+    });
+  },
+);
 
-app.put("/api/users/:id", requireAuth, requireRoles("super_admin", "branch_admin"), async (req, res) => {
-  const users = readUsers();
-  const target = users.find((user) => user.id === req.params.id);
-  if (!target) return res.status(404).json({ message: "User not found." });
-  if (!canManageBranch(req.user, target.branchId)) return res.status(403).json({ message: "You cannot manage users outside your branch." });
-  const nextBranchId = req.body.branchId === undefined ? target.branchId : req.body.branchId || null;
-  if (nextBranchId && !canManageBranch(req.user, nextBranchId)) return res.status(403).json({ message: "You cannot move users outside your branch." });
-  Object.assign(target, {
-    name: String(req.body.name || target.name).trim(),
-    phone: String(req.body.phone ?? target.phone ?? "").trim(),
-    dob: String(req.body.dob ?? target.dob ?? "").trim(),
-    profile: String(req.body.profile ?? target.profile ?? "").trim(),
-    branchId: nextBranchId,
-    salary: req.body.salary === undefined ? target.salary : Number(req.body.salary || 0),
-    updatedAt: new Date().toISOString(),
-  });
-  if (req.body.password) target.passwordHash = await bcrypt.hash(String(req.body.password), 10);
-  writeUsers(users);
-  res.json({ user: publicUser(target) });
-});
-
-app.get("/api/branches", requireAuth, requireRoles("super_admin", "branch_admin"), (req, res) => {
-  const branches = readJson(FILES.branches, []);
-  const scopedBranches = normalizeRole(req.user.role) === "branch_admin" ? branches.filter((branch) => branch.id === req.user.branchId) : branches;
-  const users = readUsers();
-  res.json({
-    branches: scopedBranches.map((branch) => ({
-      ...branch,
-      employees: users.filter((user) => user.branchId === branch.id && STAFF_ROLES.includes(normalizeRole(user.role))).length,
-      students: users.filter((user) => user.branchId === branch.id && normalizeRole(user.role) === "student").length,
-    })),
-  });
-});
-
-app.post("/api/branches", requireAuth, requireRoles("super_admin"), (req, res) => {
-  const branches = readJson(FILES.branches, []);
-  const branch = {
-    id: randomUUID(),
-    name: String(req.body.name || "").trim(),
-    code: String(req.body.code || "").trim().toUpperCase(),
-    address: String(req.body.address || "").trim(),
-    manager: String(req.body.manager || "").trim(),
-    contactEmail: String(req.body.contactEmail || "").trim().toLowerCase(),
-    contactPhone: String(req.body.contactPhone || "").trim(),
-    createdAt: new Date().toISOString(),
-  };
-  if (!branch.name || !branch.code || !branch.address) return res.status(400).json({ message: "Branch name, code, and address are required." });
-  if (branches.some((item) => item.code === branch.code)) return res.status(409).json({ message: "Branch code already exists." });
-  branches.push(branch);
-  writeJson(FILES.branches, branches);
-  res.status(201).json({ branch });
-});
-
-app.put("/api/branches/:id", requireAuth, requireRoles("super_admin"), (req, res) => {
-  const branches = readJson(FILES.branches, []);
-  const branch = branches.find((item) => item.id === req.params.id);
-  if (!branch) return res.status(404).json({ message: "Branch not found." });
-  Object.assign(branch, {
-    name: String(req.body.name || branch.name).trim(),
-    code: String(req.body.code || branch.code).trim().toUpperCase(),
-    address: String(req.body.address || branch.address).trim(),
-    manager: String(req.body.manager || branch.manager).trim(),
-    contactEmail: String(req.body.contactEmail || branch.contactEmail).trim().toLowerCase(),
-    contactPhone: String(req.body.contactPhone || branch.contactPhone).trim(),
-    updatedAt: new Date().toISOString(),
-  });
-  writeJson(FILES.branches, branches);
-  res.json({ branch });
-});
-
-app.delete("/api/branches/:id", requireAuth, requireRoles("super_admin"), (req, res) => {
-  const branches = readJson(FILES.branches, []);
-  const users = readUsers();
-  if (users.some((user) => user.branchId === req.params.id)) return res.status(409).json({ message: "Move branch users before deleting this branch." });
-  const nextBranches = branches.filter((branch) => branch.id !== req.params.id);
-  if (nextBranches.length === branches.length) return res.status(404).json({ message: "Branch not found." });
-  writeJson(FILES.branches, nextBranches);
-  res.json({ branches: nextBranches });
-});
-
-app.get("/api/reports/branches", requireAuth, requireRoles("super_admin", "branch_admin"), (req, res) => {
-  const branches = readJson(FILES.branches, []);
-  const users = scopedUsersFor(req.user);
-  const attendance = readJson(FILES.attendance, []);
-  const leaves = readJson(FILES.leaves, []);
-  const visibleBranchIds = new Set(users.map((user) => user.branchId).filter(Boolean));
-  res.json({
-    reports: branches
-      .filter((branch) => visibleBranchIds.has(branch.id) || normalizeRole(req.user.role) === "super_admin")
-      .map((branch) => ({
-        branchId: branch.id,
-        branchName: branch.name,
-        employees: users.filter((user) => user.branchId === branch.id && STAFF_ROLES.includes(normalizeRole(user.role))).length,
-        students: users.filter((user) => user.branchId === branch.id && normalizeRole(user.role) === "student").length,
-        attendanceToday: attendance.filter((item) => item.branchId === branch.id && item.date === todayKey()).length,
-        pendingLeaves: leaves.filter((item) => item.branchId === branch.id && item.status === "pending").length,
-      })),
-  });
-});
-
-app.post("/api/attendance/clock-in", requireAuth, requireRoles("employee", "student", "branch_admin"), (req, res) => {
-  const users = readUsers();
-  const user = users.find((item) => item.id === req.user.id);
-  const signature = imageSignature(req.body.imageData);
-  const location = normalizeLocation(req.body.location);
-  if (!req.body.imageData) return res.status(400).json({ message: "Camera verification image is required." });
-  if (!location) return res.status(400).json({ message: "GPS location is required for attendance." });
-  const faceResult = verifyDemoFace(user, signature);
-  if (!faceResult.ok) return res.status(403).json({ message: faceResult.message || "Face verification failed for this account." });
-  if (!user.faceSignature || user.faceSignature === "not-enrolled") {
-    user.faceSignature = signature;
+app.put(
+  "/api/users/:id",
+  requireAuth,
+  requireRoles("super_admin", "branch_admin"),
+  async (req, res) => {
+    const users = readUsers();
+    const target = users.find((user) => user.id === req.params.id);
+    if (!target) return res.status(404).json({ message: "User not found." });
+    if (!canManageBranch(req.user, target.branchId))
+      return res
+        .status(403)
+        .json({ message: "You cannot manage users outside your branch." });
+    const nextBranchId =
+      req.body.branchId === undefined
+        ? target.branchId
+        : req.body.branchId || null;
+    if (nextBranchId && !canManageBranch(req.user, nextBranchId))
+      return res
+        .status(403)
+        .json({ message: "You cannot move users outside your branch." });
+    Object.assign(target, {
+      name: String(req.body.name || target.name).trim(),
+      phone: String(req.body.phone ?? target.phone ?? "").trim(),
+      dob: String(req.body.dob ?? target.dob ?? "").trim(),
+      profile: String(req.body.profile ?? target.profile ?? "").trim(),
+      branchId: nextBranchId,
+      salary:
+        req.body.salary === undefined
+          ? target.salary
+          : Number(req.body.salary || 0),
+      updatedAt: new Date().toISOString(),
+    });
+    if (req.body.password)
+      target.passwordHash = await bcrypt.hash(String(req.body.password), 10);
     writeUsers(users);
-  }
-  const attendance = readJson(FILES.attendance, []);
-  const existing = attendance.find((item) => item.userId === user.id && item.date === todayKey());
-  if (existing?.clockInAt) return res.status(409).json({ message: "Clock-in already recorded for today." });
-  const record = {
-    id: randomUUID(),
-    userId: user.id,
-    branchId: user.branchId,
-    date: todayKey(),
-    clockInAt: new Date().toISOString(),
-    clockOutAt: null,
-    clockInLocation: location,
-    clockOutLocation: null,
-    locationDistanceMeters: null,
-    allowedRadiusMeters: ATTENDANCE_LOCATION_RADIUS_METERS,
-    deviceInfo: { clockIn: getClientDevice(req), clockOut: null },
-    status: "present",
-    invalidReason: null,
-    verification: "camera-face-signature",
-    faceMatch: true,
-  };
-  attendance.push(record);
-  writeJson(FILES.attendance, attendance);
-  res.status(201).json({ attendance: record, enrolledFace: faceResult.enrolled });
-});
+    res.json({ user: publicUser(target) });
+  },
+);
 
-app.post("/api/attendance/clock-out", requireAuth, requireRoles("employee", "student", "branch_admin"), (req, res) => {
-  const users = readUsers();
-  const user = users.find((item) => item.id === req.user.id);
-  const signature = imageSignature(req.body.imageData);
-  const location = normalizeLocation(req.body.location);
-  if (!req.body.imageData) return res.status(400).json({ message: "Camera verification image is required." });
-  if (!location) return res.status(400).json({ message: "GPS location is required for clock-out." });
-  const faceResult = verifyDemoFace(user, signature);
-  if (!faceResult.ok) return res.status(403).json({ message: faceResult.message || "Face verification failed for this account." });
-  const attendance = readJson(FILES.attendance, []);
-  const record = attendance.find((item) => item.userId === req.user.id && item.date === todayKey());
-  if (!record?.clockInAt) return res.status(400).json({ message: "Clock in before clocking out." });
-  if (record.clockOutAt) return res.status(409).json({ message: "Clock-out already recorded for today." });
-  if (!record.clockInLocation) {
-    record.clockInLocation = location;
-  }
-  const distance = Math.round(distanceMeters(record.clockInLocation, location));
-  record.clockOutAt = new Date().toISOString();
-  record.clockOutLocation = location;
-  record.locationDistanceMeters = distance;
-  record.deviceInfo = { ...(record.deviceInfo || {}), clockOut: getClientDevice(req) };
-  if (distance > ATTENDANCE_LOCATION_RADIUS_METERS) {
-    record.status = "invalid";
-    record.invalidReason = `Clock-out location is ${distance}m from clock-in, above the ${ATTENDANCE_LOCATION_RADIUS_METERS}m allowed range.`;
-  } else {
-    record.status = "present";
-    record.invalidReason = null;
-  }
-  writeJson(FILES.attendance, attendance);
-  res.json({ attendance: record });
-});
+app.get(
+  "/api/branches",
+  requireAuth,
+  requireRoles("super_admin", "branch_admin"),
+  (req, res) => {
+    const branches = readJson(FILES.branches, []);
+    const scopedBranches =
+      normalizeRole(req.user.role) === "branch_admin"
+        ? branches.filter((branch) => branch.id === req.user.branchId)
+        : branches;
+    const users = readUsers();
+    res.json({
+      branches: scopedBranches.map((branch) => ({
+        ...branch,
+        employees: users.filter(
+          (user) =>
+            user.branchId === branch.id &&
+            STAFF_ROLES.includes(normalizeRole(user.role)),
+        ).length,
+        students: users.filter(
+          (user) =>
+            user.branchId === branch.id &&
+            normalizeRole(user.role) === "student",
+        ).length,
+      })),
+    });
+  },
+);
+
+app.post(
+  "/api/branches",
+  requireAuth,
+  requireRoles("super_admin"),
+  (req, res) => {
+    const branches = readJson(FILES.branches, []);
+    const branch = {
+      id: randomUUID(),
+      name: String(req.body.name || "").trim(),
+      code: String(req.body.code || "")
+        .trim()
+        .toUpperCase(),
+      address: String(req.body.address || "").trim(),
+      manager: String(req.body.manager || "").trim(),
+      contactEmail: String(req.body.contactEmail || "")
+        .trim()
+        .toLowerCase(),
+      contactPhone: String(req.body.contactPhone || "").trim(),
+      createdAt: new Date().toISOString(),
+    };
+    if (!branch.name || !branch.code || !branch.address)
+      return res
+        .status(400)
+        .json({ message: "Branch name, code, and address are required." });
+    if (branches.some((item) => item.code === branch.code))
+      return res.status(409).json({ message: "Branch code already exists." });
+    branches.push(branch);
+    writeJson(FILES.branches, branches);
+    res.status(201).json({ branch });
+  },
+);
+
+app.put(
+  "/api/branches/:id",
+  requireAuth,
+  requireRoles("super_admin"),
+  (req, res) => {
+    const branches = readJson(FILES.branches, []);
+    const branch = branches.find((item) => item.id === req.params.id);
+    if (!branch) return res.status(404).json({ message: "Branch not found." });
+    Object.assign(branch, {
+      name: String(req.body.name || branch.name).trim(),
+      code: String(req.body.code || branch.code)
+        .trim()
+        .toUpperCase(),
+      address: String(req.body.address || branch.address).trim(),
+      manager: String(req.body.manager || branch.manager).trim(),
+      contactEmail: String(req.body.contactEmail || branch.contactEmail)
+        .trim()
+        .toLowerCase(),
+      contactPhone: String(req.body.contactPhone || branch.contactPhone).trim(),
+      updatedAt: new Date().toISOString(),
+    });
+    writeJson(FILES.branches, branches);
+    res.json({ branch });
+  },
+);
+
+app.delete(
+  "/api/branches/:id",
+  requireAuth,
+  requireRoles("super_admin"),
+  (req, res) => {
+    const branches = readJson(FILES.branches, []);
+    const users = readUsers();
+    if (users.some((user) => user.branchId === req.params.id))
+      return res
+        .status(409)
+        .json({ message: "Move branch users before deleting this branch." });
+    const nextBranches = branches.filter(
+      (branch) => branch.id !== req.params.id,
+    );
+    if (nextBranches.length === branches.length)
+      return res.status(404).json({ message: "Branch not found." });
+    writeJson(FILES.branches, nextBranches);
+    res.json({ branches: nextBranches });
+  },
+);
+
+app.get(
+  "/api/reports/branches",
+  requireAuth,
+  requireRoles("super_admin", "branch_admin"),
+  (req, res) => {
+    const branches = readJson(FILES.branches, []);
+    const users = scopedUsersFor(req.user);
+    const attendance = readJson(FILES.attendance, []);
+    const leaves = readJson(FILES.leaves, []);
+    const visibleBranchIds = new Set(
+      users.map((user) => user.branchId).filter(Boolean),
+    );
+    res.json({
+      reports: branches
+        .filter(
+          (branch) =>
+            visibleBranchIds.has(branch.id) ||
+            normalizeRole(req.user.role) === "super_admin",
+        )
+        .map((branch) => ({
+          branchId: branch.id,
+          branchName: branch.name,
+          employees: users.filter(
+            (user) =>
+              user.branchId === branch.id &&
+              STAFF_ROLES.includes(normalizeRole(user.role)),
+          ).length,
+          students: users.filter(
+            (user) =>
+              user.branchId === branch.id &&
+              normalizeRole(user.role) === "student",
+          ).length,
+          attendanceToday: attendance.filter(
+            (item) => item.branchId === branch.id && item.date === todayKey(),
+          ).length,
+          pendingLeaves: leaves.filter(
+            (item) => item.branchId === branch.id && item.status === "pending",
+          ).length,
+        })),
+    });
+  },
+);
+
+app.post(
+  "/api/attendance/clock-in",
+  requireAuth,
+  requireRoles("employee", "student", "branch_admin"),
+  (req, res) => {
+    const users = readUsers();
+    const user = users.find((item) => item.id === req.user.id);
+    const signature = imageSignature(req.body.imageData);
+    const location = normalizeLocation(req.body.location);
+    if (!req.body.imageData)
+      return res
+        .status(400)
+        .json({ message: "Camera verification image is required." });
+    if (!location)
+      return res
+        .status(400)
+        .json({ message: "GPS location is required for attendance." });
+    const faceResult = verifyDemoFace(user, signature);
+    if (!faceResult.ok)
+      return res.status(403).json({
+        message:
+          faceResult.message || "Face verification failed for this account.",
+      });
+    if (!user.faceSignature || user.faceSignature === "not-enrolled") {
+      user.faceSignature = signature;
+      writeUsers(users);
+    }
+    const attendance = readJson(FILES.attendance, []);
+    const existing = attendance.find(
+      (item) => item.userId === user.id && item.date === todayKey(),
+    );
+    if (existing?.clockInAt)
+      return res
+        .status(409)
+        .json({ message: "Clock-in already recorded for today." });
+    const record = {
+      id: randomUUID(),
+      userId: user.id,
+      branchId: user.branchId,
+      date: todayKey(),
+      clockInAt: new Date().toISOString(),
+      clockOutAt: null,
+      clockInLocation: location,
+      clockOutLocation: null,
+      locationDistanceMeters: null,
+      allowedRadiusMeters: ATTENDANCE_LOCATION_RADIUS_METERS,
+      deviceInfo: { clockIn: getClientDevice(req), clockOut: null },
+      status: "present",
+      invalidReason: null,
+      verification: "camera-face-signature",
+      faceMatch: true,
+    };
+    attendance.push(record);
+    writeJson(FILES.attendance, attendance);
+    res
+      .status(201)
+      .json({ attendance: record, enrolledFace: faceResult.enrolled });
+  },
+);
+
+app.post(
+  "/api/attendance/clock-out",
+  requireAuth,
+  requireRoles("employee", "student", "branch_admin"),
+  (req, res) => {
+    const users = readUsers();
+    const user = users.find((item) => item.id === req.user.id);
+    const signature = imageSignature(req.body.imageData);
+    const location = normalizeLocation(req.body.location);
+    if (!req.body.imageData)
+      return res
+        .status(400)
+        .json({ message: "Camera verification image is required." });
+    if (!location)
+      return res
+        .status(400)
+        .json({ message: "GPS location is required for clock-out." });
+    const faceResult = verifyDemoFace(user, signature);
+    if (!faceResult.ok)
+      return res.status(403).json({
+        message:
+          faceResult.message || "Face verification failed for this account.",
+      });
+    const attendance = readJson(FILES.attendance, []);
+    const record = attendance.find(
+      (item) => item.userId === req.user.id && item.date === todayKey(),
+    );
+    if (!record?.clockInAt)
+      return res.status(400).json({ message: "Clock in before clocking out." });
+    if (record.clockOutAt)
+      return res
+        .status(409)
+        .json({ message: "Clock-out already recorded for today." });
+    if (!record.clockInLocation) {
+      record.clockInLocation = location;
+    }
+    const distance = Math.round(
+      distanceMeters(record.clockInLocation, location),
+    );
+    record.clockOutAt = new Date().toISOString();
+    record.clockOutLocation = location;
+    record.locationDistanceMeters = distance;
+    record.deviceInfo = {
+      ...(record.deviceInfo || {}),
+      clockOut: getClientDevice(req),
+    };
+    if (distance > ATTENDANCE_LOCATION_RADIUS_METERS) {
+      record.status = "invalid";
+      record.invalidReason = `Clock-out location is ${distance}m from clock-in, above the ${ATTENDANCE_LOCATION_RADIUS_METERS}m allowed range.`;
+    } else {
+      record.status = "present";
+      record.invalidReason = null;
+    }
+    writeJson(FILES.attendance, attendance);
+    res.json({ attendance: record });
+  },
+);
 
 app.get("/api/attendance", requireAuth, (req, res) => {
   const attendance = readJson(FILES.attendance, []);
   const users = scopedUsersFor(req.user);
   const userIds = new Set(users.map((user) => user.id));
-  const records = ["employee", "student"].includes(normalizeRole(req.user.role)) ? attendance.filter((item) => item.userId === req.user.id) : attendance.filter((item) => userIds.has(item.userId));
+  const records = ["employee", "student"].includes(normalizeRole(req.user.role))
+    ? attendance.filter((item) => item.userId === req.user.id)
+    : attendance.filter((item) => userIds.has(item.userId));
   res.json({
     attendance: records.map((record) => ({
       ...record,
-      employeeName: users.find((user) => user.id === record.userId)?.name || "Unknown",
+      employeeName:
+        users.find((user) => user.id === record.userId)?.name || "Unknown",
     })),
   });
 });
 
-app.post("/api/leaves", requireAuth, requireRoles("employee", "student", "branch_admin"), (req, res) => {
-  const leaveType = String(req.body.leaveType || "").trim();
-  const fromDate = String(req.body.fromDate || "").trim();
-  const toDate = String(req.body.toDate || "").trim();
-  const reason = String(req.body.reason || "").trim();
-  if (!["casual", "sick", "permission"].includes(leaveType)) return res.status(400).json({ message: "Choose casual, sick, or permission leave." });
-  if (!fromDate || !toDate || !reason) return res.status(400).json({ message: "Dates and reason are required." });
-  const leaves = readJson(FILES.leaves, []);
-  const leave = {
-    id: randomUUID(),
-    userId: req.user.id,
-    branchId: req.user.branchId,
-    leaveType,
-    fromDate,
-    toDate,
-    reason,
-    status: "pending",
-    decidedBy: null,
-    decidedAt: null,
-    createdAt: new Date().toISOString(),
-  };
-  leaves.push(leave);
-  writeJson(FILES.leaves, leaves);
-  res.status(201).json({ leave });
-});
+app.post(
+  "/api/leaves",
+  requireAuth,
+  requireRoles("employee", "student", "branch_admin"),
+  (req, res) => {
+    const leaveType = String(req.body.leaveType || "").trim();
+    const fromDate = String(req.body.fromDate || "").trim();
+    const toDate = String(req.body.toDate || "").trim();
+    const reason = String(req.body.reason || "").trim();
+    if (!["casual", "sick", "permission"].includes(leaveType))
+      return res
+        .status(400)
+        .json({ message: "Choose casual, sick, or permission leave." });
+    if (!fromDate || !toDate || !reason)
+      return res
+        .status(400)
+        .json({ message: "Dates and reason are required." });
+    const leaves = readJson(FILES.leaves, []);
+    const leave = {
+      id: randomUUID(),
+      userId: req.user.id,
+      branchId: req.user.branchId,
+      leaveType,
+      fromDate,
+      toDate,
+      reason,
+      status: "pending",
+      decidedBy: null,
+      decidedAt: null,
+      createdAt: new Date().toISOString(),
+    };
+    leaves.push(leave);
+    writeJson(FILES.leaves, leaves);
+    res.status(201).json({ leave });
+  },
+);
 
 app.get("/api/leaves", requireAuth, (req, res) => {
   const leaves = readJson(FILES.leaves, []);
   const users = scopedUsersFor(req.user);
   const userIds = new Set(users.map((user) => user.id));
-  const records = ["employee", "student"].includes(normalizeRole(req.user.role)) ? leaves.filter((item) => item.userId === req.user.id) : leaves.filter((item) => userIds.has(item.userId));
+  const records = ["employee", "student"].includes(normalizeRole(req.user.role))
+    ? leaves.filter((item) => item.userId === req.user.id)
+    : leaves.filter((item) => userIds.has(item.userId));
   res.json({
     leaves: records.map((leave) => ({
       ...leave,
-      employeeName: users.find((user) => user.id === leave.userId)?.name || "Unknown",
+      employeeName:
+        users.find((user) => user.id === leave.userId)?.name || "Unknown",
     })),
   });
 });
 
-app.put("/api/leaves/:id/status", requireAuth, requireRoles("super_admin", "branch_admin"), (req, res) => {
-  const status = String(req.body.status || "");
-  if (!["approved", "rejected"].includes(status)) return res.status(400).json({ message: "Status must be approved or rejected." });
-  const leaves = readJson(FILES.leaves, []);
-  const leave = leaves.find((item) => item.id === req.params.id);
-  if (!leave) return res.status(404).json({ message: "Leave request not found." });
-  if (!canManageBranch(req.user, leave.branchId)) return res.status(403).json({ message: "You cannot manage leave outside your branch." });
-  leave.status = status;
-  leave.decidedBy = req.user.id;
-  leave.decidedAt = new Date().toISOString();
-  writeJson(FILES.leaves, leaves);
-  res.json({ leave });
-});
+app.put(
+  "/api/leaves/:id/status",
+  requireAuth,
+  requireRoles("super_admin", "branch_admin"),
+  (req, res) => {
+    const status = String(req.body.status || "");
+    if (!["approved", "rejected"].includes(status))
+      return res
+        .status(400)
+        .json({ message: "Status must be approved or rejected." });
+    const leaves = readJson(FILES.leaves, []);
+    const leave = leaves.find((item) => item.id === req.params.id);
+    if (!leave)
+      return res.status(404).json({ message: "Leave request not found." });
+    if (!canManageBranch(req.user, leave.branchId))
+      return res
+        .status(403)
+        .json({ message: "You cannot manage leave outside your branch." });
+    leave.status = status;
+    leave.decidedBy = req.user.id;
+    leave.decidedAt = new Date().toISOString();
+    writeJson(FILES.leaves, leaves);
+    res.json({ leave });
+  },
+);
 
 app.get("/api/tasks", requireAuth, (req, res) => {
   const tasks = readJson(FILES.tasks, []);
   const assignments = readJson(FILES.taskAssignments, []);
   const users = scopedUsersFor(req.user);
   const userIds = new Set(users.map((user) => user.id));
-  const visibleAssignments = ["employee", "student"].includes(normalizeRole(req.user.role))
+  const visibleAssignments = ["employee", "student"].includes(
+    normalizeRole(req.user.role),
+  )
     ? assignments.filter((assignment) => assignment.userId === req.user.id)
     : assignments.filter((assignment) => userIds.has(assignment.userId));
   res.json({
@@ -1683,119 +2606,199 @@ app.get("/api/teams", requireAuth, (req, res) => {
   const users = scopedUsersFor(req.user);
   const userIds = new Set(users.map((user) => user.id));
   const visibleTeams = teams
-    .filter((team) => canManageBranch(req.user, team.branchId) || members.some((member) => member.teamId === team.id && member.userId === req.user.id))
+    .filter(
+      (team) =>
+        canManageBranch(req.user, team.branchId) ||
+        members.some(
+          (member) =>
+            member.teamId === team.id && member.userId === req.user.id,
+        ),
+    )
     .map((team) => ({
       ...team,
       members: members
-        .filter((member) => member.teamId === team.id && userIds.has(member.userId))
-        .map((member) => ({ ...member, name: users.find((user) => user.id === member.userId)?.name || "Unknown" })),
+        .filter(
+          (member) => member.teamId === team.id && userIds.has(member.userId),
+        )
+        .map((member) => ({
+          ...member,
+          name:
+            users.find((user) => user.id === member.userId)?.name || "Unknown",
+        })),
     }));
   res.json({ teams: visibleTeams });
 });
 
-app.post("/api/teams", requireAuth, requireRoles("super_admin", "branch_admin"), (req, res) => {
-  const name = String(req.body.name || "").trim();
-  const branchId = req.body.branchId || req.user.branchId;
-  const type = String(req.body.type || "employee");
-  const memberIds = Array.isArray(req.body.memberIds) ? req.body.memberIds : [];
-  if (!name || !branchId) return res.status(400).json({ message: "Team name and branch are required." });
-  if (!canManageBranch(req.user, branchId)) return res.status(403).json({ message: "You cannot create teams outside your branch." });
-  const users = readUsers();
-  const members = users.filter((user) => memberIds.includes(user.id) && user.branchId === branchId);
-  const teams = readJson(FILES.teams, []);
-  const teamMembers = readJson(FILES.teamMembers, []);
-  const team = { id: randomUUID(), name, branchId, type, createdBy: req.user.id, createdAt: new Date().toISOString() };
-  teams.push(team);
-  for (const user of members) {
-    teamMembers.push({ id: randomUUID(), teamId: team.id, userId: user.id, role: normalizeRole(user.role), addedAt: new Date().toISOString() });
-  }
-  writeJson(FILES.teams, teams);
-  writeJson(FILES.teamMembers, teamMembers);
-  res.status(201).json({ team });
-});
-
-app.post("/api/tasks", requireAuth, requireRoles("super_admin", "branch_admin"), (req, res) => {
-  const title = String(req.body.title || "").trim();
-  const description = String(req.body.description || "").trim();
-  const priority = String(req.body.priority || "medium");
-  const deadline = String(req.body.deadline || "").trim();
-  let assignedUserIds = Array.isArray(req.body.assignedUserIds) ? req.body.assignedUserIds : [req.body.assignedUserId].filter(Boolean);
-  const teamId = req.body.teamId || null;
-  let teamName = null;
-  if (teamId) {
-    const team = readJson(FILES.teams, []).find((item) => item.id === teamId);
-    if (!team) return res.status(400).json({ message: "Selected team was not found." });
-    if (!canManageBranch(req.user, team.branchId)) return res.status(403).json({ message: "You cannot assign tasks to teams outside your branch." });
-    teamName = team.name;
-    assignedUserIds = readJson(FILES.teamMembers, []).filter((member) => member.teamId === teamId).map((member) => member.userId);
-  }
-  if (!title || !deadline || !assignedUserIds.length) return res.status(400).json({ message: "Task title, deadline, and assignee are required." });
-  if (!TASK_PRIORITIES.includes(priority)) return res.status(400).json({ message: "Choose low, medium, high, or urgent priority." });
-
-  const users = readUsers();
-  const assignees = users.filter((user) => assignedUserIds.includes(user.id) && ASSIGNABLE_ROLES.includes(normalizeRole(user.role)));
-  if (assignees.length !== assignedUserIds.length) return res.status(400).json({ message: "One or more assignees are invalid." });
-  if (assignees.some((user) => !canManageBranch(req.user, user.branchId))) return res.status(403).json({ message: "You cannot assign tasks outside your branch." });
-
-  const tasks = readJson(FILES.tasks, []);
-  const assignments = readJson(FILES.taskAssignments, []);
-  const statusRows = readJson(FILES.taskStatus, []);
-  const task = {
-    id: randomUUID(),
-    title,
-    description,
-    priority,
-    deadline,
-    branchId: assignees[0]?.branchId || req.user.branchId,
-    createdBy: req.user.id,
-    createdAt: new Date().toISOString(),
-  };
-  tasks.push(task);
-  for (const assignee of assignees) {
-    const assignment = {
+app.post(
+  "/api/teams",
+  requireAuth,
+  requireRoles("super_admin", "branch_admin"),
+  (req, res) => {
+    const name = String(req.body.name || "").trim();
+    const branchId = req.body.branchId || req.user.branchId;
+    const type = String(req.body.type || "employee");
+    const memberIds = Array.isArray(req.body.memberIds)
+      ? req.body.memberIds
+      : [];
+    if (!name || !branchId)
+      return res
+        .status(400)
+        .json({ message: "Team name and branch are required." });
+    if (!canManageBranch(req.user, branchId))
+      return res
+        .status(403)
+        .json({ message: "You cannot create teams outside your branch." });
+    const users = readUsers();
+    const members = users.filter(
+      (user) => memberIds.includes(user.id) && user.branchId === branchId,
+    );
+    const teams = readJson(FILES.teams, []);
+    const teamMembers = readJson(FILES.teamMembers, []);
+    const team = {
       id: randomUUID(),
-      taskId: task.id,
-      userId: assignee.id,
-      status: "pending",
-      progress: 0,
-      remarks: "",
-      assignedBy: req.user.id,
-      assignmentType: teamId ? "team" : "individual",
-      teamId,
-      teamName,
-      assignedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      name,
+      branchId,
+      type,
+      createdBy: req.user.id,
+      createdAt: new Date().toISOString(),
     };
-    assignments.push(assignment);
-    statusRows.push({
+    teams.push(team);
+    for (const user of members) {
+      teamMembers.push({
+        id: randomUUID(),
+        teamId: team.id,
+        userId: user.id,
+        role: normalizeRole(user.role),
+        addedAt: new Date().toISOString(),
+      });
+    }
+    writeJson(FILES.teams, teams);
+    writeJson(FILES.teamMembers, teamMembers);
+    res.status(201).json({ team });
+  },
+);
+
+app.post(
+  "/api/tasks",
+  requireAuth,
+  requireRoles("super_admin", "branch_admin"),
+  (req, res) => {
+    const title = String(req.body.title || "").trim();
+    const description = String(req.body.description || "").trim();
+    const priority = String(req.body.priority || "medium");
+    const deadline = String(req.body.deadline || "").trim();
+    let assignedUserIds = Array.isArray(req.body.assignedUserIds)
+      ? req.body.assignedUserIds
+      : [req.body.assignedUserId].filter(Boolean);
+    const teamId = req.body.teamId || null;
+    let teamName = null;
+    if (teamId) {
+      const team = readJson(FILES.teams, []).find((item) => item.id === teamId);
+      if (!team)
+        return res
+          .status(400)
+          .json({ message: "Selected team was not found." });
+      if (!canManageBranch(req.user, team.branchId))
+        return res.status(403).json({
+          message: "You cannot assign tasks to teams outside your branch.",
+        });
+      teamName = team.name;
+      assignedUserIds = readJson(FILES.teamMembers, [])
+        .filter((member) => member.teamId === teamId)
+        .map((member) => member.userId);
+    }
+    if (!title || !deadline || !assignedUserIds.length)
+      return res
+        .status(400)
+        .json({ message: "Task title, deadline, and assignee are required." });
+    if (!TASK_PRIORITIES.includes(priority))
+      return res
+        .status(400)
+        .json({ message: "Choose low, medium, high, or urgent priority." });
+
+    const users = readUsers();
+    const assignees = users.filter(
+      (user) =>
+        assignedUserIds.includes(user.id) &&
+        ASSIGNABLE_ROLES.includes(normalizeRole(user.role)),
+    );
+    if (assignees.length !== assignedUserIds.length)
+      return res
+        .status(400)
+        .json({ message: "One or more assignees are invalid." });
+    if (assignees.some((user) => !canManageBranch(req.user, user.branchId)))
+      return res
+        .status(403)
+        .json({ message: "You cannot assign tasks outside your branch." });
+
+    const tasks = readJson(FILES.tasks, []);
+    const assignments = readJson(FILES.taskAssignments, []);
+    const statusRows = readJson(FILES.taskStatus, []);
+    const task = {
       id: randomUUID(),
-      assignmentId: assignment.id,
-      status: "pending",
-      progress: 0,
-      remarks: "Task assigned",
-      changedBy: req.user.id,
-      changedAt: assignment.assignedAt,
-    });
-  }
-  writeJson(FILES.tasks, tasks);
-  writeJson(FILES.taskAssignments, assignments);
-  writeJson(FILES.taskStatus, statusRows);
-  res.status(201).json({ task });
-});
+      title,
+      description,
+      priority,
+      deadline,
+      branchId: assignees[0]?.branchId || req.user.branchId,
+      createdBy: req.user.id,
+      createdAt: new Date().toISOString(),
+    };
+    tasks.push(task);
+    for (const assignee of assignees) {
+      const assignment = {
+        id: randomUUID(),
+        taskId: task.id,
+        userId: assignee.id,
+        status: "pending",
+        progress: 0,
+        remarks: "",
+        assignedBy: req.user.id,
+        assignmentType: teamId ? "team" : "individual",
+        teamId,
+        teamName,
+        assignedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      assignments.push(assignment);
+      statusRows.push({
+        id: randomUUID(),
+        assignmentId: assignment.id,
+        status: "pending",
+        progress: 0,
+        remarks: "Task assigned",
+        changedBy: req.user.id,
+        changedAt: assignment.assignedAt,
+      });
+    }
+    writeJson(FILES.tasks, tasks);
+    writeJson(FILES.taskAssignments, assignments);
+    writeJson(FILES.taskStatus, statusRows);
+    res.status(201).json({ task });
+  },
+);
 
 app.put("/api/tasks/:assignmentId/status", requireAuth, (req, res) => {
   const status = String(req.body.status || "");
   const progress = Number(req.body.progress ?? 0);
   const remarks = String(req.body.remarks || "").trim();
-  if (!TASK_STATUSES.includes(status)) return res.status(400).json({ message: "Choose a valid task status." });
-  if (!Number.isFinite(progress) || progress < 0 || progress > 100) return res.status(400).json({ message: "Progress must be between 0 and 100." });
+  if (!TASK_STATUSES.includes(status))
+    return res.status(400).json({ message: "Choose a valid task status." });
+  if (!Number.isFinite(progress) || progress < 0 || progress > 100)
+    return res
+      .status(400)
+      .json({ message: "Progress must be between 0 and 100." });
 
   const assignments = readJson(FILES.taskAssignments, []);
-  const assignment = assignments.find((item) => item.id === req.params.assignmentId);
-  if (!assignment) return res.status(404).json({ message: "Task assignment not found." });
+  const assignment = assignments.find(
+    (item) => item.id === req.params.assignmentId,
+  );
+  if (!assignment)
+    return res.status(404).json({ message: "Task assignment not found." });
   const assignee = readUsers().find((user) => user.id === assignment.userId);
   const isOwner = assignment.userId === req.user.id;
-  if (!isOwner && !canManageBranch(req.user, assignee?.branchId)) return res.status(403).json({ message: "You cannot update this task." });
+  if (!isOwner && !canManageBranch(req.user, assignee?.branchId))
+    return res.status(403).json({ message: "You cannot update this task." });
 
   assignment.status = status;
   assignment.progress = status === "completed" ? 100 : progress;
@@ -1822,7 +2825,11 @@ app.get("/api/calendar/events", requireAuth, (req, res) => {
   const branches = readJson(FILES.branches, []);
   const visibleEvents = [...events, ...birthdayEventsFor(users)]
     .filter((event) => canSeeCalendarEvent(req.user, event))
-    .sort((a, b) => `${a.startDate}${a.startTime || ""}`.localeCompare(`${b.startDate}${b.startTime || ""}`))
+    .sort((a, b) =>
+      `${a.startDate}${a.startTime || ""}`.localeCompare(
+        `${b.startDate}${b.startTime || ""}`,
+      ),
+    )
     .map((event) => calendarEventView(event, users, branches));
   res.json({
     events: visibleEvents,
@@ -1830,283 +2837,509 @@ app.get("/api/calendar/events", requireAuth, (req, res) => {
   });
 });
 
-app.post("/api/calendar/events", requireAuth, requireRoles("super_admin", "branch_admin"), (req, res) => {
-  const title = String(req.body.title || "").trim();
-  const type = String(req.body.type || "");
-  const startDate = String(req.body.startDate || "").trim();
-  const endDate = String(req.body.endDate || startDate).trim();
-  const startTime = String(req.body.startTime || "").trim();
-  const description = String(req.body.description || "").trim();
-  const branchId = req.body.branchId || null;
-  const employeeId = req.body.employeeId || null;
-  const studentId = req.body.studentId || null;
-  if (!title || !startDate) return res.status(400).json({ message: "Calendar title and start date are required." });
-  if (!CALENDAR_TYPES.includes(type)) return res.status(400).json({ message: "Choose a valid calendar event type." });
+app.post(
+  "/api/calendar/events",
+  requireAuth,
+  requireRoles("super_admin", "branch_admin"),
+  (req, res) => {
+    const title = String(req.body.title || "").trim();
+    const type = String(req.body.type || "");
+    const startDate = String(req.body.startDate || "").trim();
+    const endDate = String(req.body.endDate || startDate).trim();
+    const startTime = String(req.body.startTime || "").trim();
+    const description = String(req.body.description || "").trim();
+    const branchId = req.body.branchId || null;
+    const employeeId = req.body.employeeId || null;
+    const studentId = req.body.studentId || null;
+    if (!title || !startDate)
+      return res
+        .status(400)
+        .json({ message: "Calendar title and start date are required." });
+    if (!CALENDAR_TYPES.includes(type))
+      return res
+        .status(400)
+        .json({ message: "Choose a valid calendar event type." });
 
-  const users = readUsers();
-  const branch = branchId ? readJson(FILES.branches, []).find((item) => item.id === branchId) : null;
-  const employee = employeeId ? users.find((item) => item.id === employeeId) : null;
-  const student = studentId ? users.find((item) => item.id === studentId) : null;
-  if (type === "branch_holiday" && !branchId) return res.status(400).json({ message: "Select a branch for branch-wise holidays." });
-  if (type === "employee_event" && !employeeId) return res.status(400).json({ message: "Select an employee for employee events." });
-  if (type === "student_event" && !studentId) return res.status(400).json({ message: "Select a student for student events." });
-  if (branchId && !branch) return res.status(400).json({ message: "Selected branch was not found." });
-  if (employeeId && !employee) return res.status(400).json({ message: "Selected employee was not found." });
-  if (studentId && !student) return res.status(400).json({ message: "Selected student was not found." });
-  if (branchId && !canManageBranch(req.user, branchId)) return res.status(403).json({ message: "You cannot manage calendar items outside your branch." });
-  if (employee?.branchId && !canManageBranch(req.user, employee.branchId)) return res.status(403).json({ message: "You cannot manage employee events outside your branch." });
-  if (student?.branchId && !canManageBranch(req.user, student.branchId)) return res.status(403).json({ message: "You cannot manage student events outside your branch." });
+    const users = readUsers();
+    const branch = branchId
+      ? readJson(FILES.branches, []).find((item) => item.id === branchId)
+      : null;
+    const employee = employeeId
+      ? users.find((item) => item.id === employeeId)
+      : null;
+    const student = studentId
+      ? users.find((item) => item.id === studentId)
+      : null;
+    if (type === "branch_holiday" && !branchId)
+      return res
+        .status(400)
+        .json({ message: "Select a branch for branch-wise holidays." });
+    if (type === "employee_event" && !employeeId)
+      return res
+        .status(400)
+        .json({ message: "Select an employee for employee events." });
+    if (type === "student_event" && !studentId)
+      return res
+        .status(400)
+        .json({ message: "Select a student for student events." });
+    if (branchId && !branch)
+      return res
+        .status(400)
+        .json({ message: "Selected branch was not found." });
+    if (employeeId && !employee)
+      return res
+        .status(400)
+        .json({ message: "Selected employee was not found." });
+    if (studentId && !student)
+      return res
+        .status(400)
+        .json({ message: "Selected student was not found." });
+    if (branchId && !canManageBranch(req.user, branchId))
+      return res.status(403).json({
+        message: "You cannot manage calendar items outside your branch.",
+      });
+    if (employee?.branchId && !canManageBranch(req.user, employee.branchId))
+      return res.status(403).json({
+        message: "You cannot manage employee events outside your branch.",
+      });
+    if (student?.branchId && !canManageBranch(req.user, student.branchId))
+      return res.status(403).json({
+        message: "You cannot manage student events outside your branch.",
+      });
 
-  const scope = ["company_holiday", "meeting_reminder", "training_schedule", "exam_schedule"].includes(type) ? "company" : type === "branch_holiday" ? "branch" : type === "student_event" ? "student" : "employee";
-  const events = readJson(FILES.calendarEvents, []);
-  const event = {
-    id: randomUUID(),
-    title,
-    type,
-    scope,
-    branchId: scope === "branch" ? branchId : employee?.branchId || student?.branchId || branchId || null,
-    employeeId: scope === "employee" ? employeeId : null,
-    studentId: scope === "student" ? studentId : null,
-    startDate,
-    endDate,
-    startTime,
-    description,
-    createdBy: req.user.id,
-    createdAt: new Date().toISOString(),
-  };
-  events.push(event);
-  writeJson(FILES.calendarEvents, events);
-  res.status(201).json({ event: calendarEventView(event, users, readJson(FILES.branches, [])) });
-});
-
-app.delete("/api/calendar/events/:id", requireAuth, requireRoles("super_admin", "branch_admin"), (req, res) => {
-  const events = readJson(FILES.calendarEvents, []);
-  const event = events.find((item) => item.id === req.params.id);
-  if (!event) return res.status(404).json({ message: "Calendar event not found." });
-  if (event.branchId && !canManageBranch(req.user, event.branchId)) return res.status(403).json({ message: "You cannot delete calendar items outside your branch." });
-  const nextEvents = events.filter((item) => item.id !== req.params.id);
-  writeJson(FILES.calendarEvents, nextEvents);
-  res.json({ events: nextEvents.filter((item) => canSeeCalendarEvent(req.user, item)) });
-});
-
-app.get("/api/reports/monthly", requireAuth, requireRoles("super_admin", "branch_admin"), (req, res) => {
-  const month = String(req.query.month || monthKey()).slice(0, 7);
-  res.json({ report: monthlyReportFor(req.user, month) });
-});
-
-app.get("/api/reports/monthly/export", requireAuth, requireRoles("super_admin", "branch_admin"), (req, res) => {
-  const month = String(req.query.month || monthKey()).slice(0, 7);
-  const format = String(req.query.format || "excel");
-  const report = monthlyReportFor(req.user, month);
-  if (format === "pdf") {
-    const lines = [
-      `Month: ${report.month}`,
-      `Employees: ${report.totals.employees}`,
-      `Students: ${report.totals.students}`,
-      `Attendance records: ${report.totals.attendanceRecords}`,
-      `Completed tasks: ${report.totals.completedTasks}/${report.totals.assignedTasks}`,
-      `Leave requests: ${report.totals.leaveRequests}`,
-      `Payroll processed: ${report.totals.payrollProcessed}`,
-      ...report.rows.map((row) => `${row.employeeName}: ${row.attendanceDays} days, ${row.completedTasks}/${row.totalTasks} tasks, ${row.completionRate}%`),
-    ].slice(0, 34);
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="monthly-report-${month}.pdf"`);
-    return res.send(simplePdf("Monthly Employee Report", lines));
-  }
-  res.setHeader("Content-Type", "application/vnd.ms-excel");
-  res.setHeader("Content-Disposition", `attachment; filename="monthly-report-${month}.csv"`);
-  res.send(monthlyReportCsv(report));
-});
-
-app.get("/api/payroll", requireAuth, requireRoles("super_admin", "branch_admin", "employee", "student"), (req, res) => {
-  const month = String(req.query.month || monthKey()).slice(0, 7);
-  const users = scopedUsersFor(req.user).filter((user) => STAFF_ROLES.includes(normalizeRole(user.role)));
-  const userIds = new Set(users.map((user) => user.id));
-  const payroll = readJson(FILES.payroll, []).filter((row) => row.month === month && userIds.has(row.userId));
-  const slips = readJson(FILES.salarySlips, []);
-  res.json({
-    payroll: payroll.map((row) => ({
-      ...row,
-      employeeName: users.find((user) => user.id === row.userId)?.name || "Unknown",
-      employeeId: users.find((user) => user.id === row.userId)?.employeeId || row.userId,
-      slipId: slips.find((slip) => slip.payrollId === row.id)?.id || null,
-    })),
-  });
-});
-
-app.post("/api/payroll/process", requireAuth, requireRoles("super_admin", "branch_admin"), (req, res) => {
-  const month = String(req.body.month || monthKey()).slice(0, 7);
-  const targetUserIds = Array.isArray(req.body.userIds) ? req.body.userIds : [];
-  const users = scopedUsersFor(req.user).filter((user) => STAFF_ROLES.includes(normalizeRole(user.role)));
-  const selected = targetUserIds.length ? users.filter((user) => targetUserIds.includes(user.id)) : users;
-  const payroll = readJson(FILES.payroll, []);
-  const slips = readJson(FILES.salarySlips, []);
-  for (const user of selected) {
-    const basicSalary = Number(req.body.basicSalary ?? req.body.salary ?? user.salary ?? 0);
-    const hra = Math.round(basicSalary * 0.4);
-    const incentivePay = Number(req.body.incentivePay ?? 0);
-    const bonus = Number(req.body.bonus ?? req.body.bonuses ?? 0);
-    const specialAllowance = Number(req.body.specialAllowance ?? 0);
-    const otherEarnings = Number(req.body.otherEarnings ?? 0);
-    const grossSalary = basicSalary + hra + incentivePay + bonus + specialAllowance + otherEarnings;
-    const providentFund = Math.round(basicSalary * 0.12);
-    const esi = grossSalary <= 21000 ? Math.round(grossSalary * 0.0075) : 0;
-    const professionalTax = Number(req.body.professionalTax ?? 0);
-    const salaryAdvance = Number(req.body.salaryAdvance ?? 0);
-    const loan = Number(req.body.loan ?? 0);
-    const otherDeductions = Number(req.body.otherDeductions ?? 0);
-    const totalDeductions = providentFund + esi + professionalTax + salaryAdvance + loan + otherDeductions;
-    const netPay = grossSalary - totalDeductions;
-    let row = payroll.find((item) => item.userId === user.id && item.month === month);
-    if (!row) {
-      row = { id: randomUUID(), userId: user.id, branchId: user.branchId, month, createdAt: new Date().toISOString() };
-      payroll.push(row);
-    }
-    Object.assign(row, {
-      salary: basicSalary,
-      basicSalary,
-      hra,
-      incentivePay,
-      bonus,
-      bonuses: bonus,
-      specialAllowance,
-      otherEarnings,
-      grossSalary,
-      providentFund,
-      esi,
-      professionalTax,
-      salaryAdvance,
-      loan,
-      otherDeductions,
-      deductions: totalDeductions,
-      totalDeductions,
-      netPay,
-      processedBy: req.user.id,
-      processedAt: new Date().toISOString(),
+    const scope = [
+      "company_holiday",
+      "meeting_reminder",
+      "training_schedule",
+      "exam_schedule",
+    ].includes(type)
+      ? "company"
+      : type === "branch_holiday"
+        ? "branch"
+        : type === "student_event"
+          ? "student"
+          : "employee";
+    const events = readJson(FILES.calendarEvents, []);
+    const event = {
+      id: randomUUID(),
+      title,
+      type,
+      scope,
+      branchId:
+        scope === "branch"
+          ? branchId
+          : employee?.branchId || student?.branchId || branchId || null,
+      employeeId: scope === "employee" ? employeeId : null,
+      studentId: scope === "student" ? studentId : null,
+      startDate,
+      endDate,
+      startTime,
+      description,
+      createdBy: req.user.id,
+      createdAt: new Date().toISOString(),
+    };
+    events.push(event);
+    writeJson(FILES.calendarEvents, events);
+    res.status(201).json({
+      event: calendarEventView(event, users, readJson(FILES.branches, [])),
     });
-    if (!slips.some((slip) => slip.payrollId === row.id)) {
-      slips.push({ id: randomUUID(), payrollId: row.id, userId: user.id, month, generatedAt: new Date().toISOString() });
+  },
+);
+
+app.delete(
+  "/api/calendar/events/:id",
+  requireAuth,
+  requireRoles("super_admin", "branch_admin"),
+  (req, res) => {
+    const events = readJson(FILES.calendarEvents, []);
+    const event = events.find((item) => item.id === req.params.id);
+    if (!event)
+      return res.status(404).json({ message: "Calendar event not found." });
+    if (event.branchId && !canManageBranch(req.user, event.branchId))
+      return res.status(403).json({
+        message: "You cannot delete calendar items outside your branch.",
+      });
+    const nextEvents = events.filter((item) => item.id !== req.params.id);
+    writeJson(FILES.calendarEvents, nextEvents);
+    res.json({
+      events: nextEvents.filter((item) => canSeeCalendarEvent(req.user, item)),
+    });
+  },
+);
+
+app.get(
+  "/api/reports/monthly",
+  requireAuth,
+  requireRoles("super_admin", "branch_admin"),
+  (req, res) => {
+    const month = String(req.query.month || monthKey()).slice(0, 7);
+    res.json({ report: monthlyReportFor(req.user, month) });
+  },
+);
+
+app.get(
+  "/api/reports/monthly/export",
+  requireAuth,
+  requireRoles("super_admin", "branch_admin"),
+  (req, res) => {
+    const month = String(req.query.month || monthKey()).slice(0, 7);
+    const format = String(req.query.format || "excel");
+    const report = monthlyReportFor(req.user, month);
+    if (format === "pdf") {
+      const lines = [
+        `Month: ${report.month}`,
+        `Employees: ${report.totals.employees}`,
+        `Students: ${report.totals.students}`,
+        `Attendance records: ${report.totals.attendanceRecords}`,
+        `Completed tasks: ${report.totals.completedTasks}/${report.totals.assignedTasks}`,
+        `Leave requests: ${report.totals.leaveRequests}`,
+        `Payroll processed: ${report.totals.payrollProcessed}`,
+        ...report.rows.map(
+          (row) =>
+            `${row.employeeName}: ${row.attendanceDays} days, ${row.completedTasks}/${row.totalTasks} tasks, ${row.completionRate}%`,
+        ),
+      ].slice(0, 34);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="monthly-report-${month}.pdf"`,
+      );
+      return res.send(simplePdf("Monthly Employee Report", lines));
     }
-  }
-  writeJson(FILES.payroll, payroll);
-  writeJson(FILES.salarySlips, slips);
-  res.status(201).json({ processed: selected.length });
-});
+    res.setHeader("Content-Type", "application/vnd.ms-excel");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="monthly-report-${month}.csv"`,
+    );
+    res.send(monthlyReportCsv(report));
+  },
+);
 
-app.get("/api/payroll/:id/payslip", requireAuth, requireRoles("super_admin", "branch_admin", "employee"), async (req, res, next) => {
-  const sendPayslip = ({ row, user, branch }) => {
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="payslip-${row.month}-${user?.employeeId || row.userId}.pdf"`);
-    res.send(modernPayslipPdf({ row, user, branch }));
-  };
+app.get(
+  "/api/payroll",
+  requireAuth,
+  requireRoles("super_admin", "branch_admin", "employee", "student"),
+  (req, res) => {
+    const month = String(req.query.month || monthKey()).slice(0, 7);
+    const users = scopedUsersFor(req.user).filter((user) =>
+      STAFF_ROLES.includes(normalizeRole(user.role)),
+    );
+    const userIds = new Set(users.map((user) => user.id));
+    const payroll = readJson(FILES.payroll, []).filter(
+      (row) => row.month === month && userIds.has(row.userId),
+    );
+    const slips = readJson(FILES.salarySlips, []);
+    res.json({
+      payroll: payroll.map((row) => ({
+        ...row,
+        employeeName:
+          users.find((user) => user.id === row.userId)?.name || "Unknown",
+        employeeId:
+          users.find((user) => user.id === row.userId)?.employeeId ||
+          row.userId,
+        slipId: slips.find((slip) => slip.payrollId === row.id)?.id || null,
+      })),
+    });
+  },
+);
 
-  const payroll = readJson(FILES.payroll, []);
-  const row = payroll.find((item) => item.id === req.params.id);
-  if (row) {
-    if (row.userId !== req.user.id && !canManageBranch(req.user, row.branchId)) return res.status(403).json({ message: "You cannot download this payslip." });
-    const user = readUsers().find((item) => item.id === row.userId);
-    const branch = readJson(FILES.branches, []).find((item) => item.id === row.branchId);
-    return sendPayslip({ row, user, branch });
-  }
+app.post(
+  "/api/payroll/process",
+  requireAuth,
+  requireRoles("super_admin", "branch_admin"),
+  (req, res) => {
+    const month = String(req.body.month || monthKey()).slice(0, 7);
+    const targetUserIds = Array.isArray(req.body.userIds)
+      ? req.body.userIds
+      : [];
+    const users = scopedUsersFor(req.user).filter((user) =>
+      STAFF_ROLES.includes(normalizeRole(user.role)),
+    );
+    const selected = targetUserIds.length
+      ? users.filter((user) => targetUserIds.includes(user.id))
+      : users;
+    const payroll = readJson(FILES.payroll, []);
+    const slips = readJson(FILES.salarySlips, []);
+    for (const user of selected) {
+      const basicSalary = Number(
+        req.body.basicSalary ?? req.body.salary ?? user.salary ?? 0,
+      );
+      const hra = Math.round(basicSalary * 0.4);
+      const incentivePay = Number(req.body.incentivePay ?? 0);
+      const bonus = Number(req.body.bonus ?? req.body.bonuses ?? 0);
+      const specialAllowance = Number(req.body.specialAllowance ?? 0);
+      const otherEarnings = Number(req.body.otherEarnings ?? 0);
+      const grossSalary =
+        basicSalary +
+        hra +
+        incentivePay +
+        bonus +
+        specialAllowance +
+        otherEarnings;
+      const providentFund = Math.round(basicSalary * 0.12);
+      const esi = grossSalary <= 21000 ? Math.round(grossSalary * 0.0075) : 0;
+      const professionalTax = Number(req.body.professionalTax ?? 0);
+      const salaryAdvance = Number(req.body.salaryAdvance ?? 0);
+      const loan = Number(req.body.loan ?? 0);
+      const otherDeductions = Number(req.body.otherDeductions ?? 0);
+      const totalDeductions =
+        providentFund +
+        esi +
+        professionalTax +
+        salaryAdvance +
+        loan +
+        otherDeductions;
+      const netPay = grossSalary - totalDeductions;
+      let row = payroll.find(
+        (item) => item.userId === user.id && item.month === month,
+      );
+      if (!row) {
+        row = {
+          id: randomUUID(),
+          userId: user.id,
+          branchId: user.branchId,
+          month,
+          createdAt: new Date().toISOString(),
+        };
+        payroll.push(row);
+      }
+      Object.assign(row, {
+        salary: basicSalary,
+        basicSalary,
+        hra,
+        incentivePay,
+        bonus,
+        bonuses: bonus,
+        specialAllowance,
+        otherEarnings,
+        grossSalary,
+        providentFund,
+        esi,
+        professionalTax,
+        salaryAdvance,
+        loan,
+        otherDeductions,
+        deductions: totalDeductions,
+        totalDeductions,
+        netPay,
+        processedBy: req.user.id,
+        processedAt: new Date().toISOString(),
+      });
+      if (!slips.some((slip) => slip.payrollId === row.id)) {
+        slips.push({
+          id: randomUUID(),
+          payrollId: row.id,
+          userId: user.id,
+          month,
+          generatedAt: new Date().toISOString(),
+        });
+      }
+    }
+    writeJson(FILES.payroll, payroll);
+    writeJson(FILES.salarySlips, slips);
+    res.status(201).json({ processed: selected.length });
+  },
+);
 
-  if (!isMongoConnected()) return res.status(404).json({ message: "Payroll record not found." });
+app.get(
+  "/api/payroll/:id/payslip",
+  requireAuth,
+  requireRoles("super_admin", "branch_admin", "employee"),
+  async (req, res, next) => {
+    const sendPayslip = ({ row, user, branch }) => {
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="payslip-${row.month}-${user?.employeeId || row.userId}.pdf"`,
+      );
+      res.send(modernPayslipPdf({ row, user, branch }));
+    };
 
-  try {
-    const mongoPayroll = await MongoPayroll.findById(req.params.id).lean();
-    if (!mongoPayroll) return res.status(404).json({ message: "Payroll record not found." });
+    const payroll = readJson(FILES.payroll, []);
+    const row = payroll.find((item) => item.id === req.params.id);
+    if (row) {
+      if (
+        row.userId !== req.user.id &&
+        !canManageBranch(req.user, row.branchId)
+      )
+        return res
+          .status(403)
+          .json({ message: "You cannot download this payslip." });
+      const user = readUsers().find((item) => item.id === row.userId);
+      const branch = readJson(FILES.branches, []).find(
+        (item) => item.id === row.branchId,
+      );
+      return sendPayslip({ row, user, branch });
+    }
 
-    const normalizedRow = normalizeMongoPayrollRow(mongoPayroll);
-    const [mongoUser, mongoBranch, currentMongoUser] = await Promise.all([
-      normalizedRow.userId ? MongoUser.findById(normalizedRow.userId).lean() : null,
-      normalizedRow.branchId ? MongoBranch.findById(normalizedRow.branchId).lean() : null,
-      req.user.email ? MongoUser.findOne({ email: String(req.user.email).toLowerCase() }).lean() : null,
-    ]);
+    if (!isMongoConnected())
+      return res.status(404).json({ message: "Payroll record not found." });
 
-    const role = normalizeRole(req.user.role);
-    const currentMongoUserId = currentMongoUser?._id ? String(currentMongoUser._id) : "";
-    const currentBranchId = currentMongoUser?.branchId ? String(currentMongoUser.branchId) : String(req.user.branchId || "");
-    const canDownload =
-      role === "super_admin" ||
-      normalizedRow.userId === req.user.id ||
-      normalizedRow.userId === currentMongoUserId ||
-      (role === "branch_admin" && normalizedRow.branchId && normalizedRow.branchId === currentBranchId);
-    if (!canDownload) return res.status(403).json({ message: "You cannot download this payslip." });
+    try {
+      const mongoPayroll = await MongoPayroll.findById(req.params.id).lean();
+      if (!mongoPayroll)
+        return res.status(404).json({ message: "Payroll record not found." });
 
-    return sendPayslip({ row: normalizedRow, user: mongoUser, branch: mongoBranch });
-  } catch (error) {
-    if (error?.name === "CastError") return res.status(404).json({ message: "Payroll record not found." });
-    return next(error);
-  }
-});
+      const normalizedRow = normalizeMongoPayrollRow(mongoPayroll);
+      const [mongoUser, mongoBranch, currentMongoUser] = await Promise.all([
+        normalizedRow.userId
+          ? MongoUser.findById(normalizedRow.userId).lean()
+          : null,
+        normalizedRow.branchId
+          ? MongoBranch.findById(normalizedRow.branchId).lean()
+          : null,
+        req.user.email
+          ? MongoUser.findOne({
+              email: String(req.user.email).toLowerCase(),
+            }).lean()
+          : null,
+      ]);
+
+      const role = normalizeRole(req.user.role);
+      const currentMongoUserId = currentMongoUser?._id
+        ? String(currentMongoUser._id)
+        : "";
+      const currentBranchId = currentMongoUser?.branchId
+        ? String(currentMongoUser.branchId)
+        : String(req.user.branchId || "");
+      const canDownload =
+        role === "super_admin" ||
+        normalizedRow.userId === req.user.id ||
+        normalizedRow.userId === currentMongoUserId ||
+        (role === "branch_admin" &&
+          normalizedRow.branchId &&
+          normalizedRow.branchId === currentBranchId);
+      if (!canDownload)
+        return res
+          .status(403)
+          .json({ message: "You cannot download this payslip." });
+
+      return sendPayslip({
+        row: normalizedRow,
+        user: mongoUser,
+        branch: mongoBranch,
+      });
+    } catch (error) {
+      if (error?.name === "CastError")
+        return res.status(404).json({ message: "Payroll record not found." });
+      return next(error);
+    }
+  },
+);
 
 app.get("/api/attendance-regularization", requireAuth, (req, res) => {
   const users = scopedUsersFor(req.user);
   const userIds = new Set(users.map((user) => user.id));
   const requests = readJson(FILES.attendanceRegularization, []);
-  const visible = ["employee", "student"].includes(normalizeRole(req.user.role)) ? requests.filter((request) => request.userId === req.user.id) : requests.filter((request) => userIds.has(request.userId));
-  res.json({ requests: visible.map((request) => ({ ...request, userName: users.find((user) => user.id === request.userId)?.name || "Unknown" })) });
+  const visible = ["employee", "student"].includes(normalizeRole(req.user.role))
+    ? requests.filter((request) => request.userId === req.user.id)
+    : requests.filter((request) => userIds.has(request.userId));
+  res.json({
+    requests: visible.map((request) => ({
+      ...request,
+      userName:
+        users.find((user) => user.id === request.userId)?.name || "Unknown",
+    })),
+  });
 });
 
-app.post("/api/attendance-regularization", requireAuth, requireRoles("employee", "branch_admin"), (req, res) => {
-  const type = String(req.body.type || "").trim();
-  const date = String(req.body.date || "").trim();
-  const reason = String(req.body.reason || "").trim();
-  if (!["correction", "missing_attendance", "shift_adjustment"].includes(type)) return res.status(400).json({ message: "Choose a valid regularization type." });
-  if (!date || !reason) return res.status(400).json({ message: "Date and reason are required." });
-  const requests = readJson(FILES.attendanceRegularization, []);
-  const request = {
-    id: randomUUID(),
-    userId: req.user.id,
-    branchId: req.user.branchId,
-    type,
-    date,
-    requestedClockIn: req.body.requestedClockIn || "",
-    requestedClockOut: req.body.requestedClockOut || "",
-    reason,
-    status: "pending_branch_admin",
-    branchAdminDecisionBy: null,
-    adminDecisionBy: null,
-    createdAt: new Date().toISOString(),
-  };
-  requests.push(request);
-  writeJson(FILES.attendanceRegularization, requests);
-  res.status(201).json({ request });
-});
+app.post(
+  "/api/attendance-regularization",
+  requireAuth,
+  requireRoles("employee", "branch_admin"),
+  (req, res) => {
+    const type = String(req.body.type || "").trim();
+    const date = String(req.body.date || "").trim();
+    const reason = String(req.body.reason || "").trim();
+    if (
+      !["correction", "missing_attendance", "shift_adjustment"].includes(type)
+    )
+      return res
+        .status(400)
+        .json({ message: "Choose a valid regularization type." });
+    if (!date || !reason)
+      return res.status(400).json({ message: "Date and reason are required." });
+    const requests = readJson(FILES.attendanceRegularization, []);
+    const request = {
+      id: randomUUID(),
+      userId: req.user.id,
+      branchId: req.user.branchId,
+      type,
+      date,
+      requestedClockIn: req.body.requestedClockIn || "",
+      requestedClockOut: req.body.requestedClockOut || "",
+      reason,
+      status: "pending_branch_admin",
+      branchAdminDecisionBy: null,
+      adminDecisionBy: null,
+      createdAt: new Date().toISOString(),
+    };
+    requests.push(request);
+    writeJson(FILES.attendanceRegularization, requests);
+    res.status(201).json({ request });
+  },
+);
 
-app.put("/api/attendance-regularization/:id/status", requireAuth, requireRoles("super_admin", "branch_admin"), (req, res) => {
-  const decision = String(req.body.decision || "");
-  const requests = readJson(FILES.attendanceRegularization, []);
-  const request = requests.find((item) => item.id === req.params.id);
-  if (!request) return res.status(404).json({ message: "Regularization request not found." });
-  if (!canManageBranch(req.user, request.branchId)) return res.status(403).json({ message: "You cannot manage this request." });
-  if (!["approved", "rejected"].includes(decision)) return res.status(400).json({ message: "Decision must be approved or rejected." });
-  if (normalizeRole(req.user.role) === "branch_admin") {
-    request.status = decision === "approved" ? "pending_admin" : "rejected";
-    request.branchAdminDecisionBy = req.user.id;
-    request.branchAdminDecisionAt = new Date().toISOString();
-  } else {
-    request.status = decision;
-    request.adminDecisionBy = req.user.id;
-    request.adminDecisionAt = new Date().toISOString();
-  }
-  writeJson(FILES.attendanceRegularization, requests);
-  res.json({ request });
-});
+app.put(
+  "/api/attendance-regularization/:id/status",
+  requireAuth,
+  requireRoles("super_admin", "branch_admin"),
+  (req, res) => {
+    const decision = String(req.body.decision || "");
+    const requests = readJson(FILES.attendanceRegularization, []);
+    const request = requests.find((item) => item.id === req.params.id);
+    if (!request)
+      return res
+        .status(404)
+        .json({ message: "Regularization request not found." });
+    if (!canManageBranch(req.user, request.branchId))
+      return res
+        .status(403)
+        .json({ message: "You cannot manage this request." });
+    if (!["approved", "rejected"].includes(decision))
+      return res
+        .status(400)
+        .json({ message: "Decision must be approved or rejected." });
+    if (normalizeRole(req.user.role) === "branch_admin") {
+      request.status = decision === "approved" ? "pending_admin" : "rejected";
+      request.branchAdminDecisionBy = req.user.id;
+      request.branchAdminDecisionAt = new Date().toISOString();
+    } else {
+      request.status = decision;
+      request.adminDecisionBy = req.user.id;
+      request.adminDecisionAt = new Date().toISOString();
+    }
+    writeJson(FILES.attendanceRegularization, requests);
+    res.json({ request });
+  },
+);
 
 app.get("/api/notifications", requireAuth, (req, res) => {
   const users = scopedUsersFor(req.user);
   const birthdays = birthdayEventsFor(users)
     .filter((event) => event.startDate === todayKey())
-    .map((event) => ({ id: event.id, type: "birthday", title: event.title, message: event.description, createdAt: new Date().toISOString() }));
-  const notifications = readJson(FILES.notifications, []).filter((item) => !item.userId || item.userId === req.user.id || canManageBranch(req.user, item.branchId));
+    .map((event) => ({
+      id: event.id,
+      type: "birthday",
+      title: event.title,
+      message: event.description,
+      createdAt: new Date().toISOString(),
+    }));
+  const notifications = readJson(FILES.notifications, []).filter(
+    (item) =>
+      !item.userId ||
+      item.userId === req.user.id ||
+      canManageBranch(req.user, item.branchId),
+  );
   res.json({ notifications: [...birthdays, ...notifications].slice(0, 12) });
 });
 
 app.get("/api/sessions", requireAuth, (req, res) => {
   const sessions = readJson(FILES.sessions, []);
-  const scoped = normalizeRole(req.user.role) === "super_admin"
-    ? sessions
-    : sessions.filter((session) => session.userId === req.user.id);
+  const scoped =
+    normalizeRole(req.user.role) === "super_admin"
+      ? sessions
+      : sessions.filter((session) => session.userId === req.user.id);
   res.json({ sessions: scoped });
 });
 
@@ -2119,7 +3352,11 @@ app.post("/api/2fa/setup", requireAuth, async (req, res) => {
   const users = readUsers();
   const user = users.find((item) => item.id === req.user.id);
   const secret = generateSecret();
-  const otpauth = generateURI({ issuer: "AuthFlow", label: user.email, secret });
+  const otpauth = generateURI({
+    issuer: "AuthFlow",
+    label: user.email,
+    secret,
+  });
   user.pendingTwoFactorSecret = secret;
   writeUsers(users);
   res.json({ secret, qrCodeDataUrl: await QRCode.toDataURL(otpauth) });
@@ -2129,8 +3366,10 @@ app.post("/api/2fa/enable", requireAuth, (req, res) => {
   const code = String(req.body.code || "").replace(/\s/g, "");
   const users = readUsers();
   const user = users.find((item) => item.id === req.user.id);
-  if (!user?.pendingTwoFactorSecret) return res.status(400).json({ message: "Start 2FA setup first." });
-  if (!verifySync({ token: code, secret: user.pendingTwoFactorSecret })) return res.status(401).json({ message: "Invalid authenticator code." });
+  if (!user?.pendingTwoFactorSecret)
+    return res.status(400).json({ message: "Start 2FA setup first." });
+  if (!verifySync({ token: code, secret: user.pendingTwoFactorSecret }))
+    return res.status(401).json({ message: "Invalid authenticator code." });
   user.twoFactorSecret = user.pendingTwoFactorSecret;
   user.twoFactorEnabled = true;
   delete user.pendingTwoFactorSecret;
@@ -2142,9 +3381,15 @@ app.post("/api/2fa/disable", requireAuth, (req, res) => {
   const code = String(req.body.code || "").replace(/\s/g, "");
   const users = readUsers();
   const user = users.find((item) => item.id === req.user.id);
-  if (user && adminRequiresTwoFactor(user)) return res.status(403).json({ message: "Two-step verification is required for admin accounts and cannot be disabled." });
-  if (!user?.twoFactorEnabled || !user.twoFactorSecret) return res.status(400).json({ message: "2FA is not enabled." });
-  if (!verifySync({ token: code, secret: user.twoFactorSecret })) return res.status(401).json({ message: "Invalid authenticator code." });
+  if (user && adminRequiresTwoFactor(user))
+    return res.status(403).json({
+      message:
+        "Two-step verification is required for admin accounts and cannot be disabled.",
+    });
+  if (!user?.twoFactorEnabled || !user.twoFactorSecret)
+    return res.status(400).json({ message: "2FA is not enabled." });
+  if (!verifySync({ token: code, secret: user.twoFactorSecret }))
+    return res.status(401).json({ message: "Invalid authenticator code." });
   user.twoFactorSecret = null;
   user.twoFactorEnabled = false;
   writeUsers(users);
@@ -2154,10 +3399,17 @@ app.post("/api/2fa/disable", requireAuth, (req, res) => {
 app.use((error, _req, res, next) => {
   if (!error) return next();
   if (error.name === "ValidationError") {
-    return res.status(400).json({ message: Object.values(error.errors).map((item) => item.message).join(" ") });
+    return res.status(400).json({
+      message: Object.values(error.errors)
+        .map((item) => item.message)
+        .join(" "),
+    });
   }
   if (error.code === 11000) {
-    return res.status(409).json({ message: "Duplicate record.", fields: Object.keys(error.keyPattern || {}) });
+    return res.status(409).json({
+      message: "Duplicate record.",
+      fields: Object.keys(error.keyPattern || {}),
+    });
   }
   console.error(error);
   return res.status(500).json({ message: "Server error." });
@@ -2189,7 +3441,9 @@ async function startServer() {
       console.log(`AuthFlow RBAC API running on https://localhost:${PORT}`);
     });
     app.listen(INTERNAL_HTTP_PORT, "127.0.0.1", () => {
-      console.log(`AuthFlow internal API proxy running on http://127.0.0.1:${INTERNAL_HTTP_PORT}`);
+      console.log(
+        `AuthFlow internal API proxy running on http://127.0.0.1:${INTERNAL_HTTP_PORT}`,
+      );
     });
   } else {
     app.listen(PORT, () => {
