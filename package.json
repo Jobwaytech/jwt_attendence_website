@@ -10,13 +10,13 @@
     "client": "npm --prefix authflow-next run dev",
     "client:vite": "vite --host 0.0.0.0 --open",
     "server": "node server.js",
-    "build": "npm --prefix authflow-next run build",
+    "build": "npm --prefix authflow-next run build && npm run build:vite",
     "build:vite": "vite build",
     "start": "node server.js",
     "preview": "npm run build && npm run start"
   },
   "devDependencies": {
-    "next": "16.2.6"
+    "vite": "^7.2.7"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
