@@ -2,8 +2,8 @@
 
 This project is split into:
 
-- Backend API: Express app in the repository root.
-- Frontend: Next.js app in `authflow-next`.
+- Backend API: Express app in `backend`.
+- Frontend: Next.js app in `frontend`.
 - Database: MongoDB, recommended on MongoDB Atlas.
 
 ## Recommended Hosting
@@ -26,12 +26,12 @@ Allow network access for your backend host. During setup you can temporarily all
 
 ## 2. Backend on Render
 
-Create a Render Web Service from the repository root.
+Create a Render Web Service using the `backend` directory.
 
 Settings:
 
 ```text
-Root Directory: .
+Root Directory: backend
 Build Command: npm install
 Start Command: npm start
 Health Check Path: /api/health
@@ -66,12 +66,12 @@ https://your-render-service.onrender.com/api/health
 
 ## 3. Frontend on Vercel
 
-Create a Vercel project using the `authflow-next` directory.
+Create a Vercel project using the `frontend` directory.
 
 Settings:
 
 ```text
-Root Directory: authflow-next
+Root Directory: frontend
 Framework Preset: Next.js
 Build Command: npm run build
 ```

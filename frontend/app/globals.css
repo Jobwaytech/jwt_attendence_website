@@ -1663,9 +1663,10 @@ select:focus {
 
 .attendance-list-row {
   display: grid;
-  grid-template-columns:
-    72px minmax(160px, 1.4fr) minmax(130px, 1fr) minmax(110px, 0.8fr)
-    minmax(160px, 1.1fr) minmax(120px, 0.8fr);
+  grid-template-columns: 72px minmax(160px, 1.4fr) minmax(130px, 1fr) minmax(
+      110px,
+      0.8fr
+    ) minmax(160px, 1.1fr) minmax(120px, 0.8fr);
   gap: 14px;
   align-items: center;
   padding: 14px 18px;
@@ -1740,9 +1741,10 @@ select:focus {
 
 .task-builder-card {
   display: grid;
-  grid-template-columns:
-    minmax(160px, 1fr) minmax(170px, 1fr) minmax(170px, 1fr)
-    minmax(360px, 1.6fr) 180px;
+  grid-template-columns: minmax(160px, 1fr) minmax(170px, 1fr) minmax(
+      170px,
+      1fr
+    ) minmax(360px, 1.6fr) 180px;
   gap: 12px;
   align-items: center;
   margin-bottom: 18px;
@@ -2068,9 +2070,10 @@ select:focus {
 }
 
 .inline-form.holiday-form {
-  grid-template-columns:
-    minmax(180px, 1.25fr) minmax(150px, 0.8fr) minmax(170px, 0.9fr)
-    auto auto;
+  grid-template-columns: minmax(180px, 1.25fr) minmax(150px, 0.8fr) minmax(
+      170px,
+      0.9fr
+    ) auto auto;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -2291,9 +2294,10 @@ select:focus {
 
 .regularization-fields {
   display: grid;
-  grid-template-columns:
-    minmax(150px, 0.95fr) minmax(140px, 0.78fr) minmax(130px, 0.68fr)
-    minmax(130px, 0.68fr) minmax(180px, 1fr) minmax(128px, 0.62fr);
+  grid-template-columns: minmax(150px, 0.95fr) minmax(140px, 0.78fr) minmax(
+      130px,
+      0.68fr
+    ) minmax(130px, 0.68fr) minmax(180px, 1fr) minmax(128px, 0.62fr);
   gap: 8px;
   align-items: end;
 }

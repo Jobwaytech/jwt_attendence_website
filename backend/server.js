@@ -39,12 +39,13 @@ const USE_HTTPS = process.env.USE_HTTPS === "true";
 const INTERNAL_HTTP_PORT = USE_HTTPS
   ? Number(process.env.INTERNAL_API_HTTP_PORT || 5001)
   : 0;
+const FRONTEND_DIR = join(__dirname, "..", "frontend");
 const HTTPS_KEY_PATH =
   process.env.HTTPS_KEY_PATH ||
-  join(__dirname, "authflow-next", "certificates", "authflow-key.pem");
+  join(FRONTEND_DIR, "certificates", "authflow-key.pem");
 const HTTPS_CERT_PATH =
   process.env.HTTPS_CERT_PATH ||
-  join(__dirname, "authflow-next", "certificates", "authflow.pem");
+  join(FRONTEND_DIR, "certificates", "authflow.pem");
 const JWT_SECRET =
   process.env.JWT_SECRET || "change-this-secret-before-production";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
@@ -64,7 +65,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
   .filter(Boolean);
 const DATA_DIR = join(__dirname, "data");
 const DEV_LOGIN_OTP_LOG = join(DATA_DIR, "dev-login-otps.log");
-const PUBLIC_DIR = join(__dirname, "authflow-next", "public");
+const PUBLIC_DIR = join(FRONTEND_DIR, "public");
 const PAYSLIP_LOGO_PATHS = [
   join(PUBLIC_DIR, "assets", "job-way-tech-logo.png"),
   join(PUBLIC_DIR, "job-way-tech-logo.png"),
@@ -247,22 +248,22 @@ function ensureDatabase() {
   const branches = readJson(FILES.branches, []);
   if (!branches.length) {
     branches.push({
-      id: "branch-hyd-main",
-      name: "Hyderabad Main",
-      code: "HYD-001",
-      address: "Madhapur, Hyderabad",
-      manager: "Super Admin",
-      contactEmail: "hyderabad@example.com",
+      id: "branch-main",
+      name: "Main Branch",
+      code: "BR-001",
+      address: "Branch Address 1",
+      manager: "Admin",
+      contactEmail: "branch1@example.com",
       contactPhone: "+91 90000 00001",
       createdAt: new Date().toISOString(),
     });
     branches.push({
-      id: "branch-blr-east",
-      name: "Bengaluru East",
-      code: "BLR-002",
-      address: "Whitefield, Bengaluru",
+      id: "branch-2",
+      name: "Branch 2",
+      code: "BR-002",
+      address: "Branch Address 2",
       manager: "Branch Admin",
-      contactEmail: "bengaluru@example.com",
+      contactEmail: "branch2@example.com",
       contactPhone: "+91 90000 00002",
       createdAt: new Date().toISOString(),
     });
@@ -274,7 +275,7 @@ function ensureDatabase() {
     users = [
       {
         id: randomUUID(),
-        name: "Super Admin",
+        name: "Admin",
         email: "superadmin@example.com",
         passwordHash: adminPassword,
         role: "super_admin",
@@ -289,16 +290,16 @@ function ensureDatabase() {
       },
       {
         id: randomUUID(),
-        name: "Employee Demo",
+        name: "Employee",
         email: "employee@example.com",
         passwordHash: adminPassword,
         role: "employee",
-        branchId: "branch-hyd-main",
+        branchId: "branch-main",
         phone: "+91 90000 00003",
         dob: "1996-05-29",
         profile: "Employee portal demo account",
         employeeId: "EMP-1003",
-        salary: 52000,
+        salary: 30000,
         provider: "password",
         twoFactorEnabled: false,
         twoFactorSecret: null,
@@ -307,11 +308,11 @@ function ensureDatabase() {
       },
       {
         id: randomUUID(),
-        name: "Student Demo",
+        name: "Student",
         email: "student@example.com",
         passwordHash: adminPassword,
         role: "student",
-        branchId: "branch-hyd-main",
+        branchId: "branch-main",
         phone: "+91 90000 00004",
         dob: "2003-05-29",
         profile: "Student portal demo account",
@@ -330,7 +331,7 @@ function ensureDatabase() {
         user.branchId ??
         (normalizeStoredRole(user.role) === "super_admin"
           ? null
-          : "branch-hyd-main"),
+          : "branch-main"),
       phone: user.phone || "",
       dob: user.dob || "",
       profile: user.profile || "",
@@ -351,13 +352,13 @@ function ensureDatabase() {
       salary:
         user.salary ??
         (STAFF_ROLES.includes(normalizeStoredRole(user.role))
-          ? 45000
+          ? 30000
           : undefined),
     }));
   }
   const demoAccounts = [
     {
-      name: "Super Admin",
+      name: "Admin",
       email: "superadmin@example.com",
       role: "super_admin",
       branchId: null,
@@ -366,96 +367,96 @@ function ensureDatabase() {
       profile: "Global system owner",
     },
     {
-      name: "Employee Demo",
+      name: "Employee",
       email: "employee@example.com",
       role: "employee",
-      branchId: "branch-hyd-main",
+      branchId: "branch-main",
       phone: "+91 90000 00003",
       dob: "1996-05-29",
       profile: "Employee portal demo account",
       employeeId: "EMP-1003",
-      salary: 52000,
+      salary: 30000,
       faceSignature: "not-enrolled",
     },
     {
-      name: "Student Demo",
+      name: "Student",
       email: "student@example.com",
       role: "student",
-      branchId: "branch-hyd-main",
+      branchId: "branch-main",
       phone: "+91 90000 00004",
       dob: "2003-05-29",
       profile: "Student portal demo account",
       studentId: "STU-2001",
     },
     {
-      name: "Branch Admin Demo",
+      name: "Branch Admin",
       email: "branchadmin@example.com",
       role: "branch_admin",
-      branchId: "branch-hyd-main",
+      branchId: "branch-main",
       phone: "+91 90000 00002",
       dob: "1992-03-12",
       profile: "Branch admin demo account",
       employeeId: "EMP-1002",
-      salary: 68000,
+      salary: 40000,
     },
     {
-      name: "Prudhvi",
-      email: "prudhvi@example.com",
+      name: "Employee 1",
+      email: "employee1@example.com",
       role: "employee",
-      branchId: "branch-hyd-main",
+      branchId: "branch-main",
       phone: "",
       dob: "",
       profile: "Task employee 1",
       employeeId: "EMP-E1",
-      salary: 45000,
+      salary: 30000,
       faceSignature: "not-enrolled",
     },
     {
-      name: "Ramesh",
-      email: "ramesh@example.com",
+      name: "Employee 2",
+      email: "employee2@example.com",
       role: "employee",
-      branchId: "branch-hyd-main",
+      branchId: "branch-main",
       phone: "",
       dob: "",
       profile: "Task employee 2",
       employeeId: "EMP-E2",
-      salary: 45000,
+      salary: 30000,
       faceSignature: "not-enrolled",
     },
     {
-      name: "Likhith Reddy",
-      email: "likhith.reddy@example.com",
+      name: "Employee 3",
+      email: "employee3@example.com",
       role: "employee",
-      branchId: "branch-hyd-main",
+      branchId: "branch-main",
       phone: "",
       dob: "",
       profile: "Task employee 3",
       employeeId: "EMP-E3",
-      salary: 45000,
+      salary: 30000,
       faceSignature: "not-enrolled",
     },
     {
-      name: "Praneetha",
-      email: "praneetha@example.com",
+      name: "Employee 4",
+      email: "employee4@example.com",
       role: "employee",
-      branchId: "branch-hyd-main",
+      branchId: "branch-main",
       phone: "",
       dob: "",
       profile: "Task employee 4",
       employeeId: "EMP-E4",
-      salary: 45000,
+      salary: 30000,
       faceSignature: "not-enrolled",
     },
     {
-      name: "Pushpa",
-      email: "pushpa@example.com",
+      name: "Employee 5",
+      email: "employee5@example.com",
       role: "employee",
-      branchId: "branch-hyd-main",
+      branchId: "branch-main",
       phone: "",
       dob: "",
       profile: "Task employee 5",
       employeeId: "EMP-E5",
-      salary: 45000,
+      salary: 30000,
       faceSignature: "not-enrolled",
     },
   ];
@@ -577,7 +578,7 @@ function seedOperationalData() {
     const team = {
       id: randomUUID(),
       name: "Demo Work Group",
-      branchId: employee?.branchId || student?.branchId || "branch-hyd-main",
+      branchId: employee?.branchId || student?.branchId || "branch-main",
       type: "mixed",
       createdBy: creator.id,
       createdAt: new Date().toISOString(),
@@ -3414,12 +3415,6 @@ app.use((error, _req, res, next) => {
   console.error(error);
   return res.status(500).json({ message: "Server error." });
 });
-
-const distPath = join(__dirname, "dist");
-if (existsSync(distPath)) {
-  app.use(express.static(distPath));
-  app.use((_req, res) => res.sendFile(join(distPath, "index.html")));
-}
 
 async function startServer() {
   ensureDatabase();

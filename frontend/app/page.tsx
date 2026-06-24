@@ -1,50 +1,48 @@
-/* eslint-disable react-hooks/exhaustive-deps */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import {
-  Bell,
   Building2,
   CalendarCheck,
   CalendarDays,
   Camera,
   Check,
   ClipboardList,
+  Clock,
   Download,
   Eye,
   EyeOff,
   FileBarChart,
   FileSpreadsheet,
   Flag,
-  GraduationCap,
+  Bell,
+  WalletCards,
+  MapPin,
   LayoutDashboard,
   LockKeyhole,
   LogOut,
-  MapPin,
   Menu,
   Moon,
-  Percent,
   Plus,
   Search,
   ShieldCheck,
   Sun,
   Trash2,
-  UserCheck,
   UserPlus,
+  UserCheck,
   UserX,
   Users,
-  WalletCards,
+  GraduationCap,
+  Percent,
   X,
 } from "lucide-react";
 import Image from "next/image";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
+  apiRequest as serviceApiRequest,
   mongoCreate,
   mongoDelete,
   mongoList,
   mongoUpdate,
-  apiRequest as serviceApiRequest,
 } from "./services/api";
 import {
   browserFingerprint,
@@ -856,32 +854,32 @@ function compareTaskUsers(first: User, second: User) {
 const TASK_EMPLOYEE_SLOTS = [
   {
     label: "E1",
-    name: "Prudhvi",
-    email: "prudhvi@example.com",
+    name: "Employee 1",
+    email: "employee1@example.com",
     employeeId: "EMP-E1",
   },
   {
     label: "E2",
-    name: "Ramesh",
-    email: "ramesh@example.com",
+    name: "Employee 2",
+    email: "employee2@example.com",
     employeeId: "EMP-E2",
   },
   {
     label: "E3",
-    name: "Likhith Reddy",
-    email: "likhith.reddy@example.com",
+    name: "Employee 3",
+    email: "employee3@example.com",
     employeeId: "EMP-E3",
   },
   {
     label: "E4",
-    name: "Praneetha",
-    email: "praneetha@example.com",
+    name: "Employee 4",
+    email: "employee4@example.com",
     employeeId: "EMP-E4",
   },
   {
     label: "E5",
-    name: "Pushpa",
-    email: "pushpa@example.com",
+    name: "Employee 5",
+    email: "employee5@example.com",
     employeeId: "EMP-E5",
   },
 ];
@@ -1454,14 +1452,42 @@ export default function Home() {
         mongoList<MongoAttendance>("attendances", {
           limit: 500,
           sort: "-date",
-        }),
-        mongoList<MongoLeave>("leaves", { limit: 500, sort: "-createdAt" }),
-        mongoList<MongoTask>("tasks", { limit: 500, sort: "-createdAt" }),
+        }).catch(() => ({
+          attendances: [] as MongoAttendance[],
+          total: 0,
+          page: 1,
+          limit: 500,
+        })),
+        mongoList<MongoLeave>("leaves", {
+          limit: 500,
+          sort: "-createdAt",
+        }).catch(() => ({
+          leaves: [] as MongoLeave[],
+          total: 0,
+          page: 1,
+          limit: 500,
+        })),
+        mongoList<MongoTask>("tasks", { limit: 500, sort: "-createdAt" }).catch(
+          () => ({ tasks: [] as MongoTask[], total: 0, page: 1, limit: 500 }),
+        ),
         mongoList<MongoCalendar>("calendars", {
           limit: 500,
           sort: "startDate",
-        }),
-        mongoList<MongoPayroll>("payrolls", { limit: 500, sort: "-month" }),
+        }).catch(() => ({
+          calendars: [] as MongoCalendar[],
+          total: 0,
+          page: 1,
+          limit: 500,
+        })),
+        mongoList<MongoPayroll>("payrolls", {
+          limit: 500,
+          sort: "-month",
+        }).catch(() => ({
+          payrolls: [] as MongoPayroll[],
+          total: 0,
+          page: 1,
+          limit: 500,
+        })),
         mongoList<MongoReport>("reports", {
           limit: 100,
           sort: "-createdAt",
@@ -2222,7 +2248,7 @@ export default function Home() {
               branchId,
               profile: slot.label,
               employeeId: slot.employeeId,
-              salary: 45000,
+              salary: 30000,
               provider: "password",
             })
           ).item,
@@ -2756,10 +2782,7 @@ export default function Home() {
                     "Scan this QR code in an authenticator app, then enter the 6-digit code."}
                 </p>
               </div>
-              <Image
-                src={twoFactorSetupQr}
-                alt="Two-step verification QR code"
-              />
+              <img src={twoFactorSetupQr} alt="Two-step verification QR code" />
               {twoFactorSetupKey ? (
                 <small>Manual key: {twoFactorSetupKey}</small>
               ) : null}
@@ -2879,44 +2902,34 @@ export default function Home() {
           </div>
         </div>
         <span className="sidebar-section-label">Workspace</span>
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "auto",
-            scrollbarWidth: "none",
-          }}
-        >
-          <nav className="side-nav">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  className={view === item.id ? "active" : ""}
-                  onClick={() => {
-                    setView(item.id);
-                    setMenuOpen(false);
-                  }}
-                >
-                  <Icon />
-                  {item.label}
-                </button>
-              );
-            })}
-          </nav>
-          <div className="sidebar-card">
-            <div>
-              <ShieldCheck />
-              <strong>Access scoped</strong>
-            </div>
-            <span>
-              {canManage(session)
-                ? "Admin controls enabled for your role."
-                : "Your workspace is limited to your profile."}
-            </span>
+        <nav className="side-nav">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                className={view === item.id ? "active" : ""}
+                onClick={() => {
+                  setView(item.id);
+                  setMenuOpen(false);
+                }}
+              >
+                <Icon />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+        <div className="sidebar-card">
+          <div>
+            <ShieldCheck />
+            <strong>Access scoped</strong>
           </div>
+          <span>
+            {canManage(session)
+              ? "Admin controls enabled for your role."
+              : "Your workspace is limited to your profile."}
+          </span>
         </div>
       </aside>
 
@@ -3366,6 +3379,31 @@ export default function Home() {
                   ) : null}
                 </article>
               ))}
+              {!branches.length ? (
+                <article className="branch-card">
+                  <div>
+                    <strong>
+                      {session.role === "branch_admin"
+                        ? "No branch assigned"
+                        : "No branches created"}
+                    </strong>
+                    <span>
+                      {session.role === "branch_admin"
+                        ? "Branch Admin"
+                        : "Admin"}
+                    </span>
+                  </div>
+                  <p>
+                    {session.role === "branch_admin"
+                      ? "This account is not linked to an active branch in MongoDB yet. A fresh seeded MongoDB will link the default Branch Admin to Main Branch."
+                      : "Create a branch to begin assigning users."}
+                  </p>
+                  <div className="branch-metrics">
+                    <span>0 employees</span>
+                    <span>0 students</span>
+                  </div>
+                </article>
+              ) : null}
             </div>
           </section>
         ) : null}

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = dirname(__dirname);
-const UPLOAD_DIR = join(ROOT_DIR, "authflow-next", "public", "uploads");
+const UPLOAD_DIR = join(ROOT_DIR, "..", "frontend", "public", "uploads");
 
 function extensionFromMime(mimeType = "") {
   if (mimeType.includes("png")) return "png";

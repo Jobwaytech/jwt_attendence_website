@@ -1,0 +1,24 @@
+{
+  "name": "authflow-backend",
+  "version": "1.0.0",
+  "description": "Express API backend for AuthFlow.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "server": "node server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "google-auth-library": "^10.6.2",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.7.0",
+    "nodemailer": "^9.0.0",
+    "otplib": "^13.4.0",
+    "qrcode": "^1.5.4"
+  }
+}

@@ -4,8 +4,8 @@ This project now implements phase two of the portal: secure authentication, role
 
 ## What Is Included
 
-- Next.js frontend in `authflow-next/`
-- Node.js + Express REST API in `server.js`
+- Next.js frontend in `frontend/`
+- Node.js + Express REST API in `backend/`
 - JWT login sessions with server-side session records
 - bcrypt password hashing before storage
 - RBAC roles: Super Admin, Branch Admin, Employee, Student
@@ -22,7 +22,7 @@ This project now implements phase two of the portal: secure authentication, role
 - Attendance regularization requests with Employee to Branch Admin to Super Admin approval flow
 - Monthly attendance, task completion, payroll, leave, student, and employee performance reports
 - Monthly report export endpoints for PDF and Excel-compatible CSV downloads
-- JSON-backed demo database in `data/`
+- JSON-backed demo database in `backend/data/`
 
 ## Employee 3 Remaining Work
 
@@ -51,34 +51,34 @@ Existing seeded accounts use only the four current RBAC roles.
 - Backend: Node.js, Express.js
 - Auth: bcryptjs, JSON Web Tokens, google-auth-library
 - 2FA: otplib, qrcode
-- Storage: local JSON files under `data/`
+- Storage: local JSON files under `backend/data/`
 
 ## Database Files
 
 ```txt
-data/users.json
-data/branches.json
-data/branch-employees.json
-data/branch-students.json
-data/employees.json
-data/students.json
-data/attendance.json
-data/face-profiles.json
-data/leaves.json
-data/tasks.json
-data/task-assignments.json
-data/task-status.json
-data/teams.json
-data/team-members.json
-data/calendar-events.json
-data/birthday-notifications.json
-data/payroll.json
-data/salary-slips.json
-data/reports.json
-data/attendance-regularization.json
-data/sessions.json
-data/reset-tokens.json
-data/notifications.json
+backend/data/users.json
+backend/data/branches.json
+backend/data/branch-employees.json
+backend/data/branch-students.json
+backend/data/employees.json
+backend/data/students.json
+backend/data/attendance.json
+backend/data/face-profiles.json
+backend/data/leaves.json
+backend/data/tasks.json
+backend/data/task-assignments.json
+backend/data/task-status.json
+backend/data/teams.json
+backend/data/team-members.json
+backend/data/calendar-events.json
+backend/data/birthday-notifications.json
+backend/data/payroll.json
+backend/data/salary-slips.json
+backend/data/reports.json
+backend/data/attendance-regularization.json
+backend/data/sessions.json
+backend/data/reset-tokens.json
+backend/data/notifications.json
 ```
 
 These act as separate demo tables for this phase. For production, replace them with a real database.
@@ -91,19 +91,25 @@ Install root dependencies:
 npm install
 ```
 
+Install backend dependencies:
+
+```bash
+npm --prefix backend install
+```
+
 Install Next.js app dependencies:
 
 ```bash
-npm --prefix authflow-next install
+npm --prefix frontend install
 ```
 
 Create your environment file:
 
 ```bash
-copy .env.example .env
+copy backend\.env.example backend\.env
 ```
 
-Set these values in `.env`:
+Set these values in `backend/.env`:
 
 ```txt
 JWT_SECRET=replace-this-with-a-long-random-secret

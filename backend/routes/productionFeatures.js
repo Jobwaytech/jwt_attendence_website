@@ -394,7 +394,7 @@ export function registerProductionFeatureRoutes(
             branchAdminDecisionAt: new Date(),
             remarks: req.body.remarks || "",
           },
-          { returnDocument: "after", runValidators: true },
+          { returnDocument: 'after', runValidators: true },
         );
         if (!item)
           return res
@@ -434,7 +434,7 @@ export function registerProductionFeatureRoutes(
             superAdminDecisionAt: new Date(),
             remarks: req.body.remarks || "",
           },
-          { returnDocument: "after", runValidators: true },
+          { returnDocument: 'after', runValidators: true },
         );
         if (!item)
           return res

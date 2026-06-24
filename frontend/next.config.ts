@@ -11,7 +11,6 @@ const nextConfig: NextConfig = {
     "192.168.1.12",
     "192.168.1.10",
   ],
-  devIndicators: false,
   turbopack: {
     root: process.cwd(),
   },

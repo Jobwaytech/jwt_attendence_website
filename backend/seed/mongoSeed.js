@@ -12,15 +12,11 @@ import {
 
 const passwordHashPromise = bcrypt.hash("123456", 10);
 const TASK_EMPLOYEES = [
-  { name: "Prudhvi", email: "prudhvi@example.com", employeeId: "EMP-E1" },
-  { name: "Ramesh", email: "ramesh@example.com", employeeId: "EMP-E2" },
-  {
-    name: "Likhith Reddy",
-    email: "likhith.reddy@example.com",
-    employeeId: "EMP-E3",
-  },
-  { name: "Praneetha", email: "praneetha@example.com", employeeId: "EMP-E4" },
-  { name: "Pushpa", email: "pushpa@example.com", employeeId: "EMP-E5" },
+  { name: "Employee 1", email: "employee1@example.com", employeeId: "EMP-E1" },
+  { name: "Employee 2", email: "employee2@example.com", employeeId: "EMP-E2" },
+  { name: "Employee 3", email: "employee3@example.com", employeeId: "EMP-E3" },
+  { name: "Employee 4", email: "employee4@example.com", employeeId: "EMP-E4" },
+  { name: "Employee 5", email: "employee5@example.com", employeeId: "EMP-E5" },
 ];
 
 async function ensureTaskEmployees(branchId, passwordHash) {
@@ -37,11 +33,11 @@ async function ensureTaskEmployees(branchId, passwordHash) {
           branchId,
           phone: "",
           profile: `Task employee ${index + 1}`,
-          salary: 45000,
+          salary: 30000,
           provider: "password",
           faceSignature: "not-enrolled",
         },
-        { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
+        { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
       ),
     ),
   );
@@ -49,21 +45,21 @@ async function ensureTaskEmployees(branchId, passwordHash) {
 
 async function ensureDemoPayslip(passwordHash) {
   const branch = await Branch.findOneAndUpdate(
-    { code: "HYD-001" },
+    { code: "BR-001" },
     {
-      name: "Hyderabad Main",
-      code: "HYD-001",
-      address: "Madhapur, Hyderabad",
-      manager: "Super Admin",
-      contactEmail: "hyderabad@example.com",
+      name: "Main Branch",
+      code: "BR-001",
+      address: "Branch Address 1",
+      manager: "Admin",
+      contactEmail: "branch1@example.com",
       contactPhone: "+91 90000 00001",
     },
-    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
   );
   const superAdmin = await User.findOneAndUpdate(
     { email: "superadmin@example.com" },
     {
-      name: "Super Admin",
+      name: "Admin",
       email: "superadmin@example.com",
       passwordHash,
       role: "super_admin",
@@ -73,12 +69,12 @@ async function ensureDemoPayslip(passwordHash) {
       profile: "Global system owner",
       provider: "password",
     },
-    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
   );
   const employee = await User.findOneAndUpdate(
     { email: "employee@example.com" },
     {
-      name: "Employee Demo",
+      name: "Employee",
       email: "employee@example.com",
       passwordHash,
       role: "employee",
@@ -88,11 +84,11 @@ async function ensureDemoPayslip(passwordHash) {
       dob: new Date("1996-05-29"),
       profile: "Employee portal demo account",
       employeeId: "EMP-1003",
-      salary: 52000,
+      salary: 30000,
       provider: "password",
       faceSignature: "not-enrolled",
     },
-    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
   );
 
   await Payroll.findOneAndUpdate(
@@ -106,26 +102,26 @@ async function ensureDemoPayslip(passwordHash) {
       absentDays: 1,
       leaveDays: 1,
       attendancePercentage: 92,
-      salary: 52000,
-      basicSalary: 52000,
-      hra: 20800,
+      salary: 30000,
+      basicSalary: 30000,
+      hra: 0,
       incentivePay: 0,
       bonus: 0,
       specialAllowance: 0,
       otherEarnings: 0,
-      grossSalary: 72800,
-      providentFund: 6240,
+      grossSalary: 30000,
+      providentFund: 2000,
       esi: 0,
       professionalTax: 0,
       salaryAdvance: 0,
       loan: 0,
       otherDeductions: 0,
-      totalDeductions: 6240,
-      netPay: 66560,
+      totalDeductions: 2000,
+      netPay: 28000,
       processedBy: superAdmin._id,
       processedAt: new Date(),
     },
-    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
   );
 
   return { branch, superAdmin, employee };
@@ -144,26 +140,26 @@ export async function seedMongoData() {
 
   const [mainBranch, eastBranch] = await Branch.create([
     {
-      name: "Hyderabad Main",
-      code: "HYD-001",
-      address: "Madhapur, Hyderabad",
-      manager: "Super Admin",
-      contactEmail: "hyderabad@example.com",
+      name: "Main Branch",
+      code: "BR-001",
+      address: "Branch Address 1",
+      manager: "Admin",
+      contactEmail: "branch1@example.com",
       contactPhone: "+91 90000 00001",
     },
     {
-      name: "Bengaluru East",
-      code: "BLR-002",
-      address: "Whitefield, Bengaluru",
+      name: "Branch 2",
+      code: "BR-002",
+      address: "Branch Address 2",
       manager: "Branch Admin",
-      contactEmail: "bengaluru@example.com",
+      contactEmail: "branch2@example.com",
       contactPhone: "+91 90000 00002",
     },
   ]);
 
   const [superAdmin, branchAdmin, employee, student] = await User.create([
     {
-      name: "Super Admin",
+      name: "Admin",
       email: "superadmin@example.com",
       passwordHash,
       role: "super_admin",
@@ -174,7 +170,7 @@ export async function seedMongoData() {
       provider: "password",
     },
     {
-      name: "Branch Admin Demo",
+      name: "Branch Admin",
       email: "branchadmin@example.com",
       passwordHash,
       role: "branch_admin",
@@ -184,11 +180,11 @@ export async function seedMongoData() {
       dob: new Date("1992-03-12"),
       profile: "Branch admin demo account",
       employeeId: "EMP-1002",
-      salary: 68000,
+      salary: 40000,
       provider: "password",
     },
     {
-      name: "Employee Demo",
+      name: "Employee",
       email: "employee@example.com",
       passwordHash,
       role: "employee",
@@ -198,12 +194,12 @@ export async function seedMongoData() {
       dob: new Date("1996-05-29"),
       profile: "Employee portal demo account",
       employeeId: "EMP-1003",
-      salary: 52000,
+      salary: 30000,
       provider: "password",
       faceSignature: "not-enrolled",
     },
     {
-      name: "Student Demo",
+      name: "Student",
       email: "student@example.com",
       passwordHash,
       role: "student",
@@ -251,13 +247,13 @@ export async function seedMongoData() {
     userId: employee._id,
     branchId: mainBranch._id,
     month: "2026-06",
-    salary: 52000,
-    basicSalary: 52000,
-    hra: 20800,
-    grossSalary: 72800,
-    providentFund: 6240,
-    totalDeductions: 6240,
-    netPay: 66560,
+    salary: 30000,
+    basicSalary: 30000,
+    hra: 0,
+    grossSalary: 30000,
+    providentFund: 2000,
+    totalDeductions: 2000,
+    netPay: 28000,
     processedBy: superAdmin._id,
     processedAt: new Date(),
   });
@@ -289,8 +285,8 @@ export async function seedMongoData() {
     month: "2026-06",
     branchId: mainBranch._id,
     generatedBy: superAdmin._id,
-    totals: { employees: 2, students: 1, payrollNetPay: 66560 },
-    rows: [{ employeeName: employee.name, role: employee.role, netPay: 66560 }],
+    totals: { employees: 2, students: 1, payrollNetPay: 28000 },
+    rows: [{ employeeName: employee.name, role: employee.role, netPay: 28000 }],
     notes: "Seed monthly report",
   });
 
