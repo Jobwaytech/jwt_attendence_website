@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: authflow-api
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: USE_HTTPS
+        value: "false"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: MONGODB_URI
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: ADMIN_EMAILS
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: ADMIN_OTP_RECIPIENTS
+        sync: false
+      - key: BRANCH_ADMIN_OTP_RECIPIENTS
+        sync: false
+      - key: COMPANY_LATITUDE
+        sync: false
+      - key: COMPANY_LONGITUDE
+        sync: false
+      - key: ATTENDANCE_LOCATION_RADIUS_METERS
+        value: "150"
+      - key: FACE_MATCH_THRESHOLD
+        value: "85"
