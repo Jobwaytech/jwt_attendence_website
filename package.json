@@ -1,0 +1,16 @@
+{
+  "name": "authflow-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "set USE_HTTPS=true&& set API_BASE_URL=http://127.0.0.1:5001&& concurrently \"npm:server\" \"npm:client\"",
+    "client": "npm --prefix frontend run dev",
+    "server": "npm --prefix backend run server",
+    "build": "npm --prefix frontend run build",
+    "start": "npm --prefix backend run start"
+  },
+  "dependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
