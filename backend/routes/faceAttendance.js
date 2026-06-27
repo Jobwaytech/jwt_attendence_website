@@ -17,10 +17,12 @@ const COMPANY_LONGITUDE =
 
 function mongoReady(_req, res, next) {
   if (!isMongoConnected())
-    return res.status(503).json({
-      message:
-        "MongoDB is not connected. Set MONGODB_URI and restart the server.",
-    });
+    return res
+      .status(503)
+      .json({
+        message:
+          "MongoDB is not connected. Set MONGODB_URI and restart the server.",
+      });
   next();
 }
 
@@ -240,14 +242,18 @@ export function registerFaceAttendanceRoutes(app, { requireAuth }) {
           !canManage(req) &&
           !["employee", "student", "branch_admin"].includes(roleOf(req))
         )
-          return res.status(403).json({
-            message: "Face registration is not available for this role.",
-          });
+          return res
+            .status(403)
+            .json({
+              message: "Face registration is not available for this role.",
+            });
         const faceEmbeddings = normalizeEmbeddings(req.body);
         if (faceEmbeddings.length < 3 || faceEmbeddings.length > 10)
-          return res.status(400).json({
-            message: "Capture 3 to 10 valid face samples before registering.",
-          });
+          return res
+            .status(400)
+            .json({
+              message: "Capture 3 to 10 valid face samples before registering.",
+            });
         const profile = await FaceProfile.findOneAndUpdate(
           { userId: user._id },
           {
@@ -369,14 +375,16 @@ export function registerFaceAttendanceRoutes(app, { requireAuth }) {
           },
           { returnDocument: "after", upsert: true, runValidators: true },
         );
-        res.status(approved ? 201 : 422).json({
-          attendance: item,
-          approved,
-          warning: [device.warning, gpsConfigurationWarning]
-            .filter(Boolean)
-            .join(" "),
-          message: approved ? "Attendance approved." : invalidReason,
-        });
+        res
+          .status(approved ? 201 : 422)
+          .json({
+            attendance: item,
+            approved,
+            warning: [device.warning, gpsConfigurationWarning]
+              .filter(Boolean)
+              .join(" "),
+            message: approved ? "Attendance approved." : invalidReason,
+          });
       } catch (error) {
         next(error);
       }
@@ -453,14 +461,16 @@ export function registerFaceAttendanceRoutes(app, { requireAuth }) {
           return res
             .status(404)
             .json({ message: "Clock-in record not found for today." });
-        res.status(approved ? 200 : 422).json({
-          attendance: item,
-          approved,
-          warning: [device.warning, gpsConfigurationWarning]
-            .filter(Boolean)
-            .join(" "),
-          message: approved ? "Clock-out verified." : invalidReason,
-        });
+        res
+          .status(approved ? 200 : 422)
+          .json({
+            attendance: item,
+            approved,
+            warning: [device.warning, gpsConfigurationWarning]
+              .filter(Boolean)
+              .join(" "),
+            message: approved ? "Clock-out verified." : invalidReason,
+          });
       } catch (error) {
         next(error);
       }

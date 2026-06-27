@@ -58,40 +58,28 @@ type MongoPayroll = {
 
 const employees: PayrollEmployee[] = [
   {
-    id: "emp-1",
-    employeeName: "Employee 1",
-    employeeId: "EMP-1001",
-    employeeAddress: "Branch Address 1",
+    id: "demo-branch-admin",
+    employeeName: "Branch Admin",
+    employeeId: "EMP-DEMO-BA",
+    employeeAddress: "JobWayTech Office",
+    branchName: "Main Branch",
+    department: "Operations",
+    designation: "Branch Admin",
+    dateOfJoining: "-",
+    phoneNumber: "-",
+    emailAddress: "branchadmin@example.com",
+  },
+  {
+    id: "demo-employee",
+    employeeName: "Demo Employee",
+    employeeId: "EMP-DEMO-01",
+    employeeAddress: "JobWayTech Office",
     branchName: "Main Branch",
     department: "Employee",
     designation: "Employee",
-    dateOfJoining: "2024-07-15",
-    phoneNumber: "+91 90000 00011",
-    emailAddress: "employee1@example.com",
-  },
-  {
-    id: "emp-2",
-    employeeName: "Employee 2",
-    employeeId: "EMP-1002",
-    employeeAddress: "Branch Address 2",
-    branchName: "Branch 2",
-    department: "Employee",
-    designation: "Employee",
-    dateOfJoining: "2023-11-06",
-    phoneNumber: "+91 90000 00012",
-    emailAddress: "employee2@example.com",
-  },
-  {
-    id: "emp-3",
-    employeeName: "Employee 3",
-    employeeId: "EMP-1003",
-    employeeAddress: "Branch Address 1",
-    branchName: "Main Branch",
-    department: "Employee",
-    designation: "Employee",
-    dateOfJoining: "2025-01-20",
-    phoneNumber: "+91 90000 00013",
-    emailAddress: "employee3@example.com",
+    dateOfJoining: "-",
+    phoneNumber: "-",
+    emailAddress: "employee@example.com",
   },
 ];
 
@@ -154,10 +142,10 @@ export function getPayrollEmployees() {
 }
 
 export function defaultPayrollDraft(
-  employeeId = employees[0].id,
+  employeeId = "",
   month = new Date().toISOString().slice(0, 7),
 ): PayrollDraft {
-  const draft = baseDrafts[employeeId] || baseDrafts[employees[0].id];
+  const draft = baseDrafts[employeeId] || Object.values(baseDrafts)[0];
   return { ...draft, employeeId, month };
 }
 
@@ -187,7 +175,7 @@ export function mongoUsersToPayrollEmployees(
         emailAddress: user.email,
       };
     });
-  return mapped.length ? mapped : employees;
+  return mapped;
 }
 
 export function mongoPayrollToRecord(

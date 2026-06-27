@@ -13,10 +13,12 @@ import {
 
 function mongoReady(_req, res, next) {
   if (!isMongoConnected())
-    return res.status(503).json({
-      message:
-        "MongoDB is not connected. Set MONGODB_URI and restart the server.",
-    });
+    return res
+      .status(503)
+      .json({
+        message:
+          "MongoDB is not connected. Set MONGODB_URI and restart the server.",
+      });
   next();
 }
 

@@ -1,3 +1,6 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable react-hooks/refs */
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import {
@@ -237,10 +240,7 @@ export default function StudentPortal({ route }: { route: StudentRoute }) {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [loginForm, setLoginForm] = useState({
-    email: "student@example.com",
-    password: "123456",
-  });
+  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [session, setSession] = useState<StudentUser | null>(null);
   const [workspace, setWorkspace] = useState<Workspace>({
     student: null,
@@ -710,9 +710,6 @@ export default function StudentPortal({ route }: { route: StudentRoute }) {
               Open student dashboard
             </button>
           </form>
-          <p className="demo-note">
-            Demo student: student@example.com / 123456.
-          </p>
         </section>
         {notice ? (
           <div className={`toast ${error === notice ? "error" : ""}`}>

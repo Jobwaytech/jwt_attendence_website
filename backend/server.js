@@ -55,7 +55,30 @@ const SMTP_USER = process.env.SMTP_USER || "";
 const SMTP_PASS = process.env.SMTP_PASS || "";
 const MAIL_FROM =
   process.env.MAIL_FROM || SMTP_USER || "no-reply@authflow.local";
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "superadmin@example.com")
+const ADMIN_OTP_RECIPIENTS = (
+  process.env.ADMIN_OTP_RECIPIENTS ||
+  process.env.ADMIN_OTP_RECIPIENT ||
+  "jobwaytech@gmail.com,mdjobwaytech@gmail.com"
+)
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+const BRANCH_ADMIN_OTP_RECIPIENTS = (
+  process.env.BRANCH_ADMIN_OTP_RECIPIENTS || "mplbranch.jwt@gmail.com"
+)
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+const ADMIN_EMAILS = (
+  process.env.ADMIN_EMAILS || "jobwaytech@gmail.com,mdjobwaytech@gmail.com"
+)
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+const ADMIN_OTP_EMAILS = (
+  process.env.ADMIN_OTP_EMAILS ||
+  "jobwaytech@gmail.com,mdjobwaytech@gmail.com,mplbranch.jwt@gmail.com"
+)
   .split(",")
   .map((email) => email.trim().toLowerCase())
   .filter(Boolean);
@@ -243,236 +266,42 @@ function validRole(role) {
   return ROLES.includes(role);
 }
 
+function ensureDemoUsers(users) {
+  return users;
+}
+
 function ensureDatabase() {
-  const adminPassword = bcrypt.hashSync("123456", 10);
   const branches = readJson(FILES.branches, []);
-  if (!branches.length) {
-    branches.push({
-      id: "branch-main",
-      name: "Main Branch",
-      code: "BR-001",
-      address: "Branch Address 1",
-      manager: "Admin",
-      contactEmail: "branch1@example.com",
-      contactPhone: "+91 90000 00001",
-      createdAt: new Date().toISOString(),
-    });
-    branches.push({
-      id: "branch-2",
-      name: "Branch 2",
-      code: "BR-002",
-      address: "Branch Address 2",
-      manager: "Branch Admin",
-      contactEmail: "branch2@example.com",
-      contactPhone: "+91 90000 00002",
-      createdAt: new Date().toISOString(),
-    });
-    writeJson(FILES.branches, branches);
-  }
 
   let users = readJson(FILES.users, []);
-  if (!users.length) {
-    users = [
-      {
-        id: randomUUID(),
-        name: "Admin",
-        email: "superadmin@example.com",
-        passwordHash: adminPassword,
-        role: "super_admin",
-        branchId: null,
-        phone: "+91 90000 00000",
-        dob: "1990-01-15",
-        profile: "Global system owner",
-        provider: "password",
-        twoFactorEnabled: false,
-        twoFactorSecret: null,
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: randomUUID(),
-        name: "Employee",
-        email: "employee@example.com",
-        passwordHash: adminPassword,
-        role: "employee",
-        branchId: "branch-main",
-        phone: "+91 90000 00003",
-        dob: "1996-05-29",
-        profile: "Employee portal demo account",
-        employeeId: "EMP-1003",
-        salary: 30000,
-        provider: "password",
-        twoFactorEnabled: false,
-        twoFactorSecret: null,
-        faceSignature: "not-enrolled",
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: randomUUID(),
-        name: "Student",
-        email: "student@example.com",
-        passwordHash: adminPassword,
-        role: "student",
-        branchId: "branch-main",
-        phone: "+91 90000 00004",
-        dob: "2003-05-29",
-        profile: "Student portal demo account",
-        studentId: "STU-2001",
-        provider: "password",
-        twoFactorEnabled: false,
-        twoFactorSecret: null,
-        createdAt: new Date().toISOString(),
-      },
-    ];
-  } else {
-    users = users.map((user) => ({
-      ...user,
-      role: normalizeStoredRole(user.role),
-      branchId:
-        user.branchId ??
-        (normalizeStoredRole(user.role) === "super_admin"
-          ? null
-          : "branch-main"),
-      phone: user.phone || "",
-      dob: user.dob || "",
-      profile: user.profile || "",
-      employeeId:
-        user.employeeId ||
-        (STAFF_ROLES.includes(normalizeStoredRole(user.role))
-          ? `EMP-${String(user.id || "")
-              .slice(0, 6)
-              .toUpperCase()}`
-          : undefined),
-      studentId:
-        user.studentId ||
-        (normalizeStoredRole(user.role) === "student"
-          ? `STU-${String(user.id || "")
-              .slice(0, 6)
-              .toUpperCase()}`
-          : undefined),
-      salary:
-        user.salary ??
-        (STAFF_ROLES.includes(normalizeStoredRole(user.role))
-          ? 30000
-          : undefined),
-    }));
-  }
-  const demoAccounts = [
-    {
-      name: "Admin",
-      email: "superadmin@example.com",
-      role: "super_admin",
-      branchId: null,
-      phone: "+91 90000 00000",
-      dob: "1990-01-15",
-      profile: "Global system owner",
-    },
-    {
-      name: "Employee",
-      email: "employee@example.com",
-      role: "employee",
-      branchId: "branch-main",
-      phone: "+91 90000 00003",
-      dob: "1996-05-29",
-      profile: "Employee portal demo account",
-      employeeId: "EMP-1003",
-      salary: 30000,
-      faceSignature: "not-enrolled",
-    },
-    {
-      name: "Student",
-      email: "student@example.com",
-      role: "student",
-      branchId: "branch-main",
-      phone: "+91 90000 00004",
-      dob: "2003-05-29",
-      profile: "Student portal demo account",
-      studentId: "STU-2001",
-    },
-    {
-      name: "Branch Admin",
-      email: "branchadmin@example.com",
-      role: "branch_admin",
-      branchId: "branch-main",
-      phone: "+91 90000 00002",
-      dob: "1992-03-12",
-      profile: "Branch admin demo account",
-      employeeId: "EMP-1002",
-      salary: 40000,
-    },
-    {
-      name: "Employee 1",
-      email: "employee1@example.com",
-      role: "employee",
-      branchId: "branch-main",
-      phone: "",
-      dob: "",
-      profile: "Task employee 1",
-      employeeId: "EMP-E1",
-      salary: 30000,
-      faceSignature: "not-enrolled",
-    },
-    {
-      name: "Employee 2",
-      email: "employee2@example.com",
-      role: "employee",
-      branchId: "branch-main",
-      phone: "",
-      dob: "",
-      profile: "Task employee 2",
-      employeeId: "EMP-E2",
-      salary: 30000,
-      faceSignature: "not-enrolled",
-    },
-    {
-      name: "Employee 3",
-      email: "employee3@example.com",
-      role: "employee",
-      branchId: "branch-main",
-      phone: "",
-      dob: "",
-      profile: "Task employee 3",
-      employeeId: "EMP-E3",
-      salary: 30000,
-      faceSignature: "not-enrolled",
-    },
-    {
-      name: "Employee 4",
-      email: "employee4@example.com",
-      role: "employee",
-      branchId: "branch-main",
-      phone: "",
-      dob: "",
-      profile: "Task employee 4",
-      employeeId: "EMP-E4",
-      salary: 30000,
-      faceSignature: "not-enrolled",
-    },
-    {
-      name: "Employee 5",
-      email: "employee5@example.com",
-      role: "employee",
-      branchId: "branch-main",
-      phone: "",
-      dob: "",
-      profile: "Task employee 5",
-      employeeId: "EMP-E5",
-      salary: 30000,
-      faceSignature: "not-enrolled",
-    },
-  ];
-  for (const account of demoAccounts) {
-    if (!users.some((user) => user.email === account.email)) {
-      users.push({
-        id: randomUUID(),
-        ...account,
-        passwordHash: adminPassword,
-        provider: "password",
-        twoFactorEnabled: false,
-        twoFactorSecret: null,
-        createdAt: new Date().toISOString(),
-      });
-    }
-  }
+  users = users.map((user) => ({
+    ...user,
+    role: normalizeStoredRole(user.role),
+    branchId: user.branchId ?? null,
+    phone: user.phone || "",
+    dob: user.dob || "",
+    profile: user.profile || "",
+    employeeId:
+      user.employeeId ||
+      (STAFF_ROLES.includes(normalizeStoredRole(user.role))
+        ? `EMP-${String(user.id || "")
+            .slice(0, 6)
+            .toUpperCase()}`
+        : undefined),
+    studentId:
+      user.studentId ||
+      (normalizeStoredRole(user.role) === "student"
+        ? `STU-${String(user.id || "")
+            .slice(0, 6)
+            .toUpperCase()}`
+        : undefined),
+    salary:
+      user.salary ??
+      (STAFF_ROLES.includes(normalizeStoredRole(user.role))
+        ? 30000
+        : undefined),
+  }));
+  users = ensureDemoUsers(users);
   writeJson(FILES.users, users);
 
   for (const key of [
@@ -511,6 +340,59 @@ function readUsers() {
 function writeUsers(users) {
   writeJson(FILES.users, users);
   syncBranchAssignments();
+}
+
+function mongoUserToLocalUser(mongoUser) {
+  const id = String(mongoUser._id || mongoUser.id || "");
+  const branchId = mongoUser.branchId ? String(mongoUser.branchId) : null;
+  const dob =
+    mongoUser.dob instanceof Date
+      ? mongoUser.dob.toISOString().slice(0, 10)
+      : mongoUser.dob
+        ? String(mongoUser.dob).slice(0, 10)
+        : "";
+
+  return {
+    id,
+    name: mongoUser.name || mongoUser.email,
+    email: String(mongoUser.email || "").toLowerCase(),
+    passwordHash: mongoUser.passwordHash || null,
+    role: normalizeRole(mongoUser.role),
+    branchId,
+    phone: mongoUser.phone || "",
+    dob,
+    profile: mongoUser.profile || "",
+    employeeId: mongoUser.employeeId || undefined,
+    studentId: mongoUser.studentId || undefined,
+    salary: mongoUser.salary ?? undefined,
+    provider: mongoUser.provider || "password",
+    twoFactorEnabled: Boolean(mongoUser.twoFactorEnabled),
+    twoFactorSecret: mongoUser.twoFactorSecret || null,
+    picture: mongoUser.picture || "",
+    faceSignature:
+      mongoUser.faceSignature ||
+      (["employee", "student"].includes(normalizeRole(mongoUser.role))
+        ? "not-enrolled"
+        : undefined),
+    createdAt: mongoUser.createdAt
+      ? new Date(mongoUser.createdAt).toISOString()
+      : new Date().toISOString(),
+  };
+}
+
+function upsertLocalUserFromMongo(mongoUser) {
+  const localUser = mongoUserToLocalUser(mongoUser);
+  const users = readUsers();
+  const existing = users.find((item) => item.email === localUser.email);
+
+  if (existing) {
+    Object.assign(existing, localUser, { id: existing.id || localUser.id });
+  } else {
+    users.push(localUser);
+  }
+
+  writeUsers(users);
+  return existing || localUser;
 }
 
 function syncBranchAssignments() {
@@ -565,37 +447,8 @@ function syncBranchAssignments() {
 }
 
 function seedOperationalData() {
-  const users = readUsers();
-  const employee = users.find(
-    (user) => normalizeRole(user.role) === "employee",
-  );
-  const student = users.find((user) => normalizeRole(user.role) === "student");
-  const creator =
-    users.find((user) => normalizeRole(user.role) === "super_admin") ||
-    users[0];
-  const teams = readJson(FILES.teams, []);
-  if (!teams.length && creator && (employee || student)) {
-    const team = {
-      id: randomUUID(),
-      name: "Demo Work Group",
-      branchId: employee?.branchId || student?.branchId || "branch-main",
-      type: "mixed",
-      createdBy: creator.id,
-      createdAt: new Date().toISOString(),
-    };
-    teams.push(team);
-    writeJson(FILES.teams, teams);
-    writeJson(
-      FILES.teamMembers,
-      [employee, student].filter(Boolean).map((user) => ({
-        id: randomUUID(),
-        teamId: team.id,
-        userId: user.id,
-        role: normalizeRole(user.role),
-        addedAt: new Date().toISOString(),
-      })),
-    );
-  }
+  readJson(FILES.teams, []);
+  readJson(FILES.teamMembers, []);
 }
 
 function publicUser(user) {
@@ -670,7 +523,10 @@ function verifyEmailOtpToken(token) {
 }
 
 function adminRequiresTwoFactor(user) {
-  return ADMIN_2FA_REQUIRED_ROLES.includes(normalizeRole(user.role));
+  return (
+    ADMIN_2FA_REQUIRED_ROLES.includes(normalizeRole(user.role)) ||
+    ADMIN_OTP_EMAILS.includes(String(user.email || "").toLowerCase())
+  );
 }
 
 async function createRequiredTwoFactorSetup(user) {
@@ -699,17 +555,30 @@ function mailTransportReady() {
   return Boolean(SMTP_HOST && SMTP_USER && SMTP_PASS);
 }
 
+function otpRecipientsForUser(user) {
+  const role = normalizeRole(user.role);
+  if (role === "branch_admin")
+    return BRANCH_ADMIN_OTP_RECIPIENTS.length
+      ? BRANCH_ADMIN_OTP_RECIPIENTS
+      : [user.email];
+  if (role === "super_admin")
+    return ADMIN_OTP_RECIPIENTS.length ? ADMIN_OTP_RECIPIENTS : [user.email];
+  return [user.email];
+}
+
 async function sendLoginOtpEmail(user, otp) {
+  const otpRecipients = otpRecipientsForUser(user);
+  const recipientText = otpRecipients.join(", ");
   const subject = "Your AuthFlow login OTP";
-  const text = `Your login OTP is ${otp}. It expires in 5 minutes. If you did not request this login, ignore this email.`;
+  const text = `Your login OTP for ${user.email} is ${otp}. It expires in 5 minutes. If you did not request this login, ignore this email.`;
 
   if (!mailTransportReady()) {
-    console.warn(`[DEV LOGIN OTP] ${user.email}: ${otp}`);
+    console.warn(`[DEV LOGIN OTP] ${user.email} -> ${recipientText}: ${otp}`);
     appendFileSync(
       DEV_LOGIN_OTP_LOG,
-      `${new Date().toISOString()} ${user.email} ${otp}\n`,
+      `${new Date().toISOString()} ${user.email} ${recipientText} ${otp}\n`,
     );
-    return { delivered: false, devOtp: otp };
+    return { delivered: false, devOtp: otp, recipient: recipientText };
   }
 
   const transporter = nodemailer.createTransport({
@@ -720,11 +589,11 @@ async function sendLoginOtpEmail(user, otp) {
   });
   await transporter.sendMail({
     from: MAIL_FROM,
-    to: user.email,
+    to: otpRecipients,
     subject,
     text,
   });
-  return { delivered: true };
+  return { delivered: true, recipient: recipientText };
 }
 
 async function createEmailOtpChallenge(user) {
@@ -753,8 +622,8 @@ async function createEmailOtpChallenge(user) {
     requiresEmailOtp: true,
     emailOtpToken: createEmailOtpToken(user, challenge.id),
     message: delivery.delivered
-      ? `Enter the OTP sent to ${user.email}.`
-      : `Email is not configured yet. Use the local test OTP below for ${user.email}.`,
+      ? `Enter the OTP sent to ${delivery.recipient}.`
+      : `Email is not configured yet. Use the local test OTP below for ${delivery.recipient}.`,
     devOtp: delivery.delivered ? undefined : delivery.devOtp,
   };
 }
@@ -1878,12 +1747,34 @@ app.post("/api/login", async (req, res) => {
     .toLowerCase();
   const password = String(req.body.password || "");
   const requestedRole = req.body.role ? String(req.body.role) : null;
-  const user = readUsers().find((item) => item.email === email);
+  let user = readUsers().find((item) => item.email === email);
+  let passwordMatches = Boolean(
+    user?.passwordHash && (await bcrypt.compare(password, user.passwordHash)),
+  );
 
-  if (
-    !user?.passwordHash ||
-    !(await bcrypt.compare(password, user.passwordHash))
-  ) {
+  if (!passwordMatches && isMongoConnected()) {
+    const mongoUser = await MongoUser.findOne({ email })
+      .lean()
+      .catch(() => null);
+    if (mongoUser?.passwordHash) {
+      passwordMatches = await bcrypt
+        .compare(password, mongoUser.passwordHash)
+        .catch(() => false);
+      if (!passwordMatches && password === mongoUser.passwordHash) {
+        const passwordHash = await bcrypt.hash(password, 10);
+        await MongoUser.updateOne(
+          { _id: mongoUser._id },
+          { passwordHash },
+        ).catch(() => null);
+        mongoUser.passwordHash = passwordHash;
+        passwordMatches = true;
+      }
+
+      if (passwordMatches) user = upsertLocalUserFromMongo(mongoUser);
+    }
+  }
+
+  if (!user?.passwordHash || !passwordMatches) {
     await recordLoginAttempt(
       req,
       email,
@@ -1911,9 +1802,11 @@ app.post("/api/login", async (req, res) => {
       "Role mismatch.",
       requestedRole,
     );
-    return res.status(403).json({
-      message: `This account is registered as ${ROLE_LABELS[normalizeRole(user.role)]}.`,
-    });
+    return res
+      .status(403)
+      .json({
+        message: `This account is registered as ${ROLE_LABELS[normalizeRole(user.role)]}.`,
+      });
   }
 
   await recordLoginAttempt(
@@ -1985,10 +1878,12 @@ app.post("/api/reset-password", async (req, res) => {
 
 app.post("/api/google-login", async (req, res) => {
   if (!GOOGLE_CLIENT_ID)
-    return res.status(500).json({
-      message:
-        "Google login is not configured. Add GOOGLE_CLIENT_ID to your environment.",
-    });
+    return res
+      .status(500)
+      .json({
+        message:
+          "Google login is not configured. Add GOOGLE_CLIENT_ID to your environment.",
+      });
   const credential = String(req.body.credential || "");
   if (!credential)
     return res.status(400).json({ message: "Google credential is required." });
@@ -2065,9 +1960,11 @@ app.post("/api/admin-otp/verify-login", async (req, res) => {
     const users = readUsers();
     const user = users.find((item) => item.id === payload.id);
     if (!user || !adminRequiresTwoFactor(user))
-      return res.status(401).json({
-        message: "Email OTP verification is not available for this account.",
-      });
+      return res
+        .status(401)
+        .json({
+          message: "Email OTP verification is not available for this account.",
+        });
 
     const challenges = readJson(FILES.emailOtpChallenges, []);
     const challenge = challenges.find(
@@ -2082,9 +1979,11 @@ app.post("/api/admin-otp/verify-login", async (req, res) => {
         .status(401)
         .json({ message: "OTP expired. Login again to receive a new OTP." });
     if (challenge.attempts >= 5)
-      return res.status(429).json({
-        message: "Too many OTP attempts. Login again to receive a new OTP.",
-      });
+      return res
+        .status(429)
+        .json({
+          message: "Too many OTP attempts. Login again to receive a new OTP.",
+        });
 
     challenge.attempts += 1;
     const valid =
@@ -2387,10 +2286,12 @@ app.post(
         .json({ message: "GPS location is required for attendance." });
     const faceResult = verifyDemoFace(user, signature);
     if (!faceResult.ok)
-      return res.status(403).json({
-        message:
-          faceResult.message || "Face verification failed for this account.",
-      });
+      return res
+        .status(403)
+        .json({
+          message:
+            faceResult.message || "Face verification failed for this account.",
+        });
     if (!user.faceSignature || user.faceSignature === "not-enrolled") {
       user.faceSignature = signature;
       writeUsers(users);
@@ -2447,10 +2348,12 @@ app.post(
         .json({ message: "GPS location is required for clock-out." });
     const faceResult = verifyDemoFace(user, signature);
     if (!faceResult.ok)
-      return res.status(403).json({
-        message:
-          faceResult.message || "Face verification failed for this account.",
-      });
+      return res
+        .status(403)
+        .json({
+          message:
+            faceResult.message || "Face verification failed for this account.",
+        });
     const attendance = readJson(FILES.attendance, []);
     const record = attendance.find(
       (item) => item.userId === req.user.id && item.date === todayKey(),
@@ -2700,9 +2603,11 @@ app.post(
           .status(400)
           .json({ message: "Selected team was not found." });
       if (!canManageBranch(req.user, team.branchId))
-        return res.status(403).json({
-          message: "You cannot assign tasks to teams outside your branch.",
-        });
+        return res
+          .status(403)
+          .json({
+            message: "You cannot assign tasks to teams outside your branch.",
+          });
       teamName = team.name;
       assignedUserIds = readJson(FILES.teamMembers, [])
         .filter((member) => member.teamId === teamId)
@@ -2896,17 +2801,23 @@ app.post(
         .status(400)
         .json({ message: "Selected student was not found." });
     if (branchId && !canManageBranch(req.user, branchId))
-      return res.status(403).json({
-        message: "You cannot manage calendar items outside your branch.",
-      });
+      return res
+        .status(403)
+        .json({
+          message: "You cannot manage calendar items outside your branch.",
+        });
     if (employee?.branchId && !canManageBranch(req.user, employee.branchId))
-      return res.status(403).json({
-        message: "You cannot manage employee events outside your branch.",
-      });
+      return res
+        .status(403)
+        .json({
+          message: "You cannot manage employee events outside your branch.",
+        });
     if (student?.branchId && !canManageBranch(req.user, student.branchId))
-      return res.status(403).json({
-        message: "You cannot manage student events outside your branch.",
-      });
+      return res
+        .status(403)
+        .json({
+          message: "You cannot manage student events outside your branch.",
+        });
 
     const scope = [
       "company_holiday",
@@ -2941,9 +2852,11 @@ app.post(
     };
     events.push(event);
     writeJson(FILES.calendarEvents, events);
-    res.status(201).json({
-      event: calendarEventView(event, users, readJson(FILES.branches, [])),
-    });
+    res
+      .status(201)
+      .json({
+        event: calendarEventView(event, users, readJson(FILES.branches, [])),
+      });
   },
 );
 
@@ -2957,9 +2870,11 @@ app.delete(
     if (!event)
       return res.status(404).json({ message: "Calendar event not found." });
     if (event.branchId && !canManageBranch(req.user, event.branchId))
-      return res.status(403).json({
-        message: "You cannot delete calendar items outside your branch.",
-      });
+      return res
+        .status(403)
+        .json({
+          message: "You cannot delete calendar items outside your branch.",
+        });
     const nextEvents = events.filter((item) => item.id !== req.params.id);
     writeJson(FILES.calendarEvents, nextEvents);
     res.json({
@@ -3383,10 +3298,12 @@ app.post("/api/2fa/disable", requireAuth, (req, res) => {
   const users = readUsers();
   const user = users.find((item) => item.id === req.user.id);
   if (user && adminRequiresTwoFactor(user))
-    return res.status(403).json({
-      message:
-        "Two-step verification is required for admin accounts and cannot be disabled.",
-    });
+    return res
+      .status(403)
+      .json({
+        message:
+          "Two-step verification is required for admin accounts and cannot be disabled.",
+      });
   if (!user?.twoFactorEnabled || !user.twoFactorSecret)
     return res.status(400).json({ message: "2FA is not enabled." });
   if (!verifySync({ token: code, secret: user.twoFactorSecret }))
@@ -3407,10 +3324,12 @@ app.use((error, _req, res, next) => {
     });
   }
   if (error.code === 11000) {
-    return res.status(409).json({
-      message: "Duplicate record.",
-      fields: Object.keys(error.keyPattern || {}),
-    });
+    return res
+      .status(409)
+      .json({
+        message: "Duplicate record.",
+        fields: Object.keys(error.keyPattern || {}),
+      });
   }
   console.error(error);
   return res.status(500).json({ message: "Server error." });

@@ -429,6 +429,7 @@ const emptyUserForm = {
   picture: "",
   dob: "",
   profile: "",
+  employeeId: "",
 };
 
 const emptyBranchForm = {
@@ -851,74 +852,6 @@ function compareTaskUsers(first: User, second: User) {
   );
 }
 
-const TASK_EMPLOYEE_SLOTS = [
-  {
-    label: "E1",
-    name: "Employee 1",
-    email: "employee1@example.com",
-    employeeId: "EMP-E1",
-  },
-  {
-    label: "E2",
-    name: "Employee 2",
-    email: "employee2@example.com",
-    employeeId: "EMP-E2",
-  },
-  {
-    label: "E3",
-    name: "Employee 3",
-    email: "employee3@example.com",
-    employeeId: "EMP-E3",
-  },
-  {
-    label: "E4",
-    name: "Employee 4",
-    email: "employee4@example.com",
-    employeeId: "EMP-E4",
-  },
-  {
-    label: "E5",
-    name: "Employee 5",
-    email: "employee5@example.com",
-    employeeId: "EMP-E5",
-  },
-];
-
-function taskEmptySlots(teamType: string, users: User[]) {
-  const slots: {
-    label: string;
-    detail: string;
-    name: string;
-    email: string;
-    employeeId: string;
-  }[] = [];
-  const occupiedEmployeeLabels = new Set(
-    users
-      .filter(isTaskEmployeeUser)
-      .map((item) => String(item.employeeId || "").match(/^EMP-E(\d+)$/i)?.[1])
-      .filter(Boolean)
-      .map((slot) => `E${slot}`),
-  );
-  const studentCount = users.filter((item) => item.role === "student").length;
-  if (teamType === "employee" || teamType === "mixed") {
-    TASK_EMPLOYEE_SLOTS.forEach((slot) => {
-      if (!occupiedEmployeeLabels.has(slot.label))
-        slots.push({ ...slot, detail: slot.name });
-    });
-  }
-  if (teamType === "student" || teamType === "mixed") {
-    for (let index = studentCount + 1; index <= 5; index += 1)
-      slots.push({
-        label: `S${index}`,
-        detail: "Create student to enable",
-        name: "",
-        email: "",
-        employeeId: "",
-      });
-  }
-  return slots;
-}
-
 function previousMonthKey(value = new Date()) {
   const date = new Date(value);
   date.setMonth(date.getMonth() - 1);
@@ -979,8 +912,8 @@ export default function Home() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [loginForm, setLoginForm] = useState({
-    email: "superadmin@example.com",
-    password: "123456",
+    email: "",
+    password: "",
     role: "super_admin" as Role,
   });
   const [twoFactorToken, setTwoFactorToken] = useState("");
@@ -1019,6 +952,7 @@ export default function Home() {
   const [reportMonth, setReportMonth] = useState(
     new Date().toISOString().slice(0, 7),
   );
+  const [payrollBranchId, setPayrollBranchId] = useState("");
   const [attendanceMonitorDate, setAttendanceMonitorDate] = useState(
     new Date().toISOString().slice(0, 10),
   );
@@ -1081,6 +1015,16 @@ export default function Home() {
   const mongoSessionUser = useMemo(
     () => users.find((user) => user.email === session?.email) || session,
     [session, users],
+  );
+  const payrollBranches = branches;
+  const visiblePayroll = useMemo(
+    () =>
+      payroll.filter(
+        (row) =>
+          row.month === reportMonth &&
+          (!payrollBranchId || row.branchId === payrollBranchId),
+      ),
+    [payroll, payrollBranchId, reportMonth],
   );
 
   const dailyAttendanceMonitor = useMemo(() => {
@@ -1402,6 +1346,28 @@ export default function Home() {
     setNotice(message);
     setError(isError ? message : "");
     window.setTimeout(() => setNotice(""), 2800);
+  }
+
+  function handleUserPictureUpload(file: File | null) {
+    if (!file) return;
+    if (file.type !== "image/jpeg") {
+      toast("Upload a JPG profile photo.", true);
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast("Profile photo must be 2MB or smaller.", true);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setUserForm((current) => ({
+        ...current,
+        picture: String(reader.result || ""),
+      }));
+    };
+    reader.onerror = () => toast("Unable to read the profile photo.", true);
+    reader.readAsDataURL(file);
   }
 
   async function hydrateSession() {
@@ -1761,7 +1727,7 @@ export default function Home() {
       setResetToken(result.resetToken || "");
       toast(
         result.resetToken
-          ? `Demo reset token: ${result.resetToken}`
+          ? `Reset token: ${result.resetToken}`
           : result.message,
       );
     } catch (caught) {
@@ -2217,60 +2183,6 @@ export default function Home() {
     }
   }
 
-  async function selectEmployeeSlot(slot: {
-    label: string;
-    name: string;
-    email: string;
-    employeeId: string;
-  }) {
-    try {
-      const branchId =
-        teamForm.branchId ||
-        mongoSessionUser?.branchId ||
-        branches[0]?.id ||
-        "";
-      if (!branchId)
-        throw new Error("Select a branch before adding this employee.");
-      const existing = users.find(
-        (user) =>
-          user.email === slot.email || user.employeeId === slot.employeeId,
-      );
-      const user =
-        existing ||
-        mapMongoUser(
-          (
-            await mongoCreate<MongoUser>("users", {
-              name: slot.name,
-              email: slot.email,
-              passwordHash: "123456",
-              role: "employee",
-              roleLabel: "Employee",
-              branchId,
-              profile: slot.label,
-              employeeId: slot.employeeId,
-              salary: 30000,
-              provider: "password",
-            })
-          ).item,
-        );
-      if (!existing) setUsers((current) => [...current, user]);
-      setTeamForm((current) => ({
-        ...current,
-        memberIds: current.memberIds.includes(user.id)
-          ? current.memberIds
-          : [...current.memberIds, user.id],
-      }));
-      toast(`${slot.label} ${slot.name} added.`);
-    } catch (caught) {
-      toast(
-        caught instanceof Error
-          ? caught.message
-          : `Unable to add ${slot.label}.`,
-        true,
-      );
-    }
-  }
-
   async function updateTask(task: TaskItem) {
     const draft = taskDrafts[task.assignmentId];
     if (!draft) return;
@@ -2468,9 +2380,15 @@ export default function Home() {
     try {
       if (!mongoSessionUser?.id)
         throw new Error("MongoDB user profile is not loaded for this session.");
-      const payrollUsers = users.filter((user) =>
-        ["branch_admin", "employee"].includes(effectiveRole(user.role)),
+      if (!payrollBranchId)
+        throw new Error("Select a branch before processing payroll.");
+      const payrollUsers = users.filter(
+        (user) =>
+          user.branchId === payrollBranchId &&
+          ["branch_admin", "employee"].includes(effectiveRole(user.role)),
       );
+      if (!payrollUsers.length)
+        throw new Error("No payroll members found in the selected branch.");
       await Promise.all(
         payrollUsers.map((user) => {
           const salary = Number(user.salary || 0);
@@ -2497,7 +2415,9 @@ export default function Home() {
       );
       await loadWorkspace();
       await loadMonthlyReport(reportMonth);
-      toast("Monthly payroll processed.");
+      toast(
+        `Payroll processed for ${branches.find((branch) => branch.id === payrollBranchId)?.name || "selected branch"}.`,
+      );
     } catch (caught) {
       toast(
         caught instanceof Error ? caught.message : "Unable to process payroll.",
@@ -2814,14 +2734,6 @@ export default function Home() {
               Generate reset
             </button>
             {resetToken ? <small>{resetToken}</small> : null}
-          </div>
-          <div className="demo-note auth-demo-note">
-            <strong>Demo access</strong>
-            <span>
-              superadmin@example.com, branchadmin@example.com,
-              employee@example.com
-            </span>
-            <span>Password: 123456</span>
           </div>
         </section>
       </main>
@@ -3200,13 +3112,24 @@ export default function Home() {
                 placeholder="Phone"
               />
               <input
-                type="url"
-                value={userForm.picture}
+                value={userForm.employeeId}
                 onChange={(event) =>
-                  setUserForm({ ...userForm, picture: event.target.value })
+                  setUserForm({ ...userForm, employeeId: event.target.value })
                 }
-                placeholder="Picture URL"
+                placeholder="EMP ID"
               />
+              <label className="file-upload-field">
+                <span>
+                  {userForm.picture ? "Photo selected" : "Upload JPG"}
+                </span>
+                <input
+                  type="file"
+                  accept="image/jpeg,.jpg,.jpeg"
+                  onChange={(event) =>
+                    handleUserPictureUpload(event.target.files?.[0] || null)
+                  }
+                />
+              </label>
               <input
                 type="date"
                 value={userForm.dob}
@@ -3449,10 +3372,7 @@ export default function Home() {
                       onChange={(event) =>
                         setAttendanceMonitorRole(
                           event.target.value as
-                            | "all"
-                            | "branch_admin"
-                            | "employee"
-                            | "student",
+                            "all" | "branch_admin" | "employee" | "student",
                         )
                       }
                     >
@@ -3834,30 +3754,6 @@ export default function Home() {
                             </label>
                           );
                         })}
-                      {taskEmptySlots(teamForm.type, users).map((slot) =>
-                        slot.label.startsWith("E") ? (
-                          <label className="member-chip" key={slot.label}>
-                            <input
-                              type="checkbox"
-                              onChange={(event) => {
-                                if (event.target.checked)
-                                  void selectEmployeeSlot(slot);
-                              }}
-                            />
-                            <strong>{slot.label}</strong>
-                            <span>{slot.detail}</span>
-                          </label>
-                        ) : (
-                          <div
-                            className="member-chip disabled"
-                            key={slot.label}
-                          >
-                            <input type="checkbox" disabled />
-                            <strong>{slot.label}</strong>
-                            <span>{slot.detail}</span>
-                          </div>
-                        ),
-                      )}
                     </div>
                   </details>
                   <button className="primary-button compact" type="submit">
@@ -4388,7 +4284,18 @@ export default function Home() {
                   payslips.
                 </p>
               </div>
-              <div className="report-actions">
+              <div className="report-actions payroll-actions">
+                <select
+                  value={payrollBranchId}
+                  onChange={(event) => setPayrollBranchId(event.target.value)}
+                >
+                  <option value="">Select branch</option>
+                  {payrollBranches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
                 <input
                   type="month"
                   value={reportMonth}
@@ -4408,7 +4315,7 @@ export default function Home() {
               </div>
             </div>
             <div className="payroll-card-grid">
-              {payroll.map((row) => (
+              {visiblePayroll.map((row) => (
                 <article className="payroll-card" key={row.id}>
                   <div className="payroll-card-head">
                     <div>
@@ -4441,12 +4348,12 @@ export default function Home() {
                   </button>
                 </article>
               ))}
-              {!payroll.length ? (
+              {!visiblePayroll.length ? (
                 <article className="payroll-empty">
                   <strong>No payroll generated</strong>
                   <span>
-                    Process the selected month to generate salary slips and
-                    payslip PDFs.
+                    Select a branch and process the selected month to generate
+                    salary slips and payslip PDFs.
                   </span>
                 </article>
               ) : null}

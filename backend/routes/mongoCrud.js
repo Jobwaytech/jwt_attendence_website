@@ -11,6 +11,7 @@ import {
   User,
 } from "../models/index.js";
 import { isMongoConnected } from "../config/db.js";
+import bcrypt from "bcryptjs";
 
 const resources = {
   users: { Model: User, listKey: "users", managerOnly: true },
@@ -65,10 +66,12 @@ const resources = {
 
 function mongoReady(_req, res, next) {
   if (!isMongoConnected())
-    return res.status(503).json({
-      message:
-        "MongoDB is not connected. Set MONGODB_URI and restart the server.",
-    });
+    return res
+      .status(503)
+      .json({
+        message:
+          "MongoDB is not connected. Set MONGODB_URI and restart the server.",
+      });
   next();
 }
 
@@ -100,9 +103,11 @@ function canUseResource(req, res, next) {
     writeMethod &&
     !(resource.writeRoles || ["super_admin", "branch_admin"]).includes(role)
   )
-    return res.status(403).json({
-      message: "You do not have permission to modify this MongoDB resource.",
-    });
+    return res
+      .status(403)
+      .json({
+        message: "You do not have permission to modify this MongoDB resource.",
+      });
   return next();
 }
 
@@ -218,7 +223,17 @@ export function registerMongoCrudRoutes(app, { requireAuth }) {
     canUseResource,
     async (req, res, next) => {
       try {
-        const item = await req.mongoResource.Model.create(req.body);
+        const body = { ...req.body };
+        if (req.mongoResource.key === "users") {
+          const plainPassword = String(
+            body.password || body.passwordHash || "",
+          );
+          if (plainPassword && !plainPassword.startsWith("$2")) {
+            body.passwordHash = await bcrypt.hash(plainPassword, 10);
+          }
+          delete body.password;
+        }
+        const item = await req.mongoResource.Model.create(body);
         res.status(201).json({ item });
       } catch (error) {
         next(error);
@@ -234,6 +249,14 @@ export function registerMongoCrudRoutes(app, { requireAuth }) {
     canUseResource,
     async (req, res, next) => {
       try {
+        const body = { ...req.body };
+        if (req.mongoResource.key === "users") {
+          const plainPassword = String(body.password || "");
+          if (plainPassword) {
+            body.passwordHash = await bcrypt.hash(plainPassword, 10);
+          }
+          delete body.password;
+        }
         const item = await req.mongoResource.Model.findByIdAndUpdate(
           req.params.id,
           req.body,
