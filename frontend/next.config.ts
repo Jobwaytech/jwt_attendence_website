@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
-const apiBaseUrl = process.env.API_BASE_URL?.replace(/\/$/, "");
+const apiBaseUrl =
+  process.env.VERCEL === "1"
+    ? undefined
+    : process.env.API_BASE_URL?.replace(/\/$/, "");
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: [
