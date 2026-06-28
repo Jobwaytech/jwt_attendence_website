@@ -49,12 +49,14 @@ const HTTPS_CERT_PATH =
 const JWT_SECRET =
   process.env.JWT_SECRET || "change-this-secret-before-production";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
+const EMAIL_USERNAME = process.env.EMAIL_USERNAME || process.env.SMTP_USER || "";
+const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD || process.env.SMTP_PASS || "";
 const SMTP_HOST = process.env.SMTP_HOST || "";
 const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
-const SMTP_USER = process.env.SMTP_USER || "";
-const SMTP_PASS = process.env.SMTP_PASS || "";
+const SMTP_USER = EMAIL_USERNAME;
+const SMTP_PASS = EMAIL_PASSWORD;
 const MAIL_FROM =
-  process.env.MAIL_FROM || SMTP_USER || "no-reply@authflow.local";
+  process.env.MAIL_FROM || EMAIL_USERNAME || "no-reply@authflow.local";
 const ADMIN_OTP_RECIPIENTS = (
   process.env.ADMIN_OTP_RECIPIENTS ||
   process.env.ADMIN_OTP_RECIPIENT ||
@@ -552,7 +554,30 @@ async function createRequiredTwoFactorSetup(user) {
 }
 
 function mailTransportReady() {
-  return Boolean(SMTP_HOST && SMTP_USER && SMTP_PASS);
+  return Boolean(EMAIL_USERNAME && EMAIL_PASSWORD);
+}
+
+function createMailTransporter() {
+  const auth = { user: EMAIL_USERNAME, pass: EMAIL_PASSWORD };
+  const useGmailService =
+    !SMTP_HOST || SMTP_HOST.toLowerCase() === "smtp.gmail.com";
+
+  if (useGmailService) {
+    return nodemailer.createTransport({
+      service: "gmail",
+      auth,
+    });
+  }
+
+  return nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: SMTP_PORT === 465,
+    family: 4,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    auth,
+  });
 }
 
 function otpRecipientsForUser(user) {
@@ -581,17 +606,26 @@ async function sendLoginOtpEmail(user, otp) {
     return { delivered: false, devOtp: otp, recipient: recipientText };
   }
 
-  const transporter = nodemailer.createTransport({
-    service :'gmail',
-    auth: { user: SMTP_USER, pass: SMTP_PASS },
-  });
-  await transporter.sendMail({
-    from: MAIL_FROM,
-    to: otpRecipients,
-    subject,
-    text,
-  });
-  return { delivered: true, recipient: recipientText };
+  const transporter = createMailTransporter();
+  try {
+    await transporter.sendMail({
+      from: MAIL_FROM,
+      to: otpRecipients,
+      subject,
+      text,
+    });
+    return { delivered: true, recipient: recipientText };
+  } catch (error) {
+    console.warn(
+      `[DEV LOGIN OTP FALLBACK] ${user.email} -> ${recipientText}: ${otp}`,
+      error?.message || error,
+    );
+    appendFileSync(
+      DEV_LOGIN_OTP_LOG,
+      `${new Date().toISOString()} ${user.email} ${recipientText} ${otp}\n`,
+    );
+    return { delivered: false, devOtp: otp, recipient: recipientText };
+  }
 }
 
 async function createEmailOtpChallenge(user) {
