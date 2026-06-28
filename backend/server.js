@@ -725,7 +725,7 @@ function validateEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
   if (!token)
@@ -744,7 +744,13 @@ function requireAuth(req, res, next) {
         return res.status(401).json({ message: "Session expired or revoked." });
       }
     }
-    const user = readUsers().find((item) => item.id === payload.id);
+    let user = readUsers().find((item) => item.id === payload.id);
+    if (!user && isMongoConnected()) {
+      const mongoUser = await MongoUser.findById(payload.id)
+        .lean()
+        .catch(() => null);
+      if (mongoUser) user = upsertLocalUserFromMongo(mongoUser);
+    }
     if (!user)
       return res
         .status(401)
