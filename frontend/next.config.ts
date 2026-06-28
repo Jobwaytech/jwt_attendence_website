@@ -1,8 +1,6 @@
 import type { NextConfig } from "next";
 
-const apiBaseUrl = (
-  process.env.API_BASE_URL || "http://127.0.0.1:5001"
-).replace(/\/$/, "");
+const apiBaseUrl = process.env.API_BASE_URL?.replace(/\/$/, "");
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: [
@@ -40,6 +38,7 @@ const nextConfig: NextConfig = {
     ];
   },
   async rewrites() {
+    if (!apiBaseUrl) return [];
     return [
       {
         source: "/api/:path*",

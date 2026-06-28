@@ -14,6 +14,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createServer as createHttpsServer } from "node:https";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateSync, inflateSync } from "node:zlib";
@@ -88,7 +89,8 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
-const DATA_DIR = join(__dirname, "data");
+const IS_VERCEL = process.env.VERCEL === "1";
+const DATA_DIR = process.env.DATA_DIR || join(IS_VERCEL ? tmpdir() : __dirname, "data");
 const DEV_LOGIN_OTP_LOG = join(DATA_DIR, "dev-login-otps.log");
 const PUBLIC_DIR = join(FRONTEND_DIR, "public");
 const PAYSLIP_LOGO_PATHS = [
@@ -204,6 +206,35 @@ app.use((req, res, next) => {
       .json({ message: "Too many requests. Try again later." });
   return next();
 });
+
+let runtimeReadyPromise = null;
+
+async function ensureRuntimeReady() {
+  if (!runtimeReadyPromise) {
+    runtimeReadyPromise = (async () => {
+      ensureDatabase();
+      try {
+        const connection = await connectDB();
+        if (connection) await seedMongoData();
+      } catch (error) {
+        console.error("MongoDB startup failed:", error.message);
+      }
+    })();
+  }
+  return runtimeReadyPromise;
+}
+
+if (IS_VERCEL) {
+  app.use(async (_req, res, next) => {
+    try {
+      await ensureRuntimeReady();
+      next();
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Server startup failed." });
+    }
+  });
+}
 
 app.get("/api/health", (_req, res) => {
   res.json({
@@ -3402,4 +3433,8 @@ async function startServer() {
   }
 }
 
-startServer();
+if (process.env.VERCEL !== "1") {
+  startServer();
+}
+
+export default app;
