@@ -565,6 +565,9 @@ function createMailTransporter() {
   if (useGmailService) {
     return nodemailer.createTransport({
       service: "gmail",
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 20000,
       auth,
     });
   }
@@ -576,6 +579,7 @@ function createMailTransporter() {
     family: 4,
     connectionTimeout: 15000,
     greetingTimeout: 15000,
+    socketTimeout: 20000,
     auth,
   });
 }
