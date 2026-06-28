@@ -33,7 +33,12 @@ import {
   User as MongoUser,
 } from "./models/index.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const IS_NETLIFY = process.env.NETLIFY === "true";
+const IS_VERCEL = process.env.VERCEL === "1";
+const IS_SERVERLESS = IS_NETLIFY || IS_VERCEL;
+const __dirname = IS_NETLIFY
+  ? join(process.cwd(), "backend")
+  : dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.API_PORT || process.env.PORT || 5000;
 const USE_HTTPS = process.env.USE_HTTPS === "true";
@@ -89,8 +94,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
-const IS_VERCEL = process.env.VERCEL === "1";
-const DATA_DIR = process.env.DATA_DIR || join(IS_VERCEL ? tmpdir() : __dirname, "data");
+const DATA_DIR = process.env.DATA_DIR || join(IS_SERVERLESS ? tmpdir() : __dirname, "data");
 const DEV_LOGIN_OTP_LOG = join(DATA_DIR, "dev-login-otps.log");
 const PUBLIC_DIR = join(FRONTEND_DIR, "public");
 const PAYSLIP_LOGO_PATHS = [
