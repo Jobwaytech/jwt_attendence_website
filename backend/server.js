@@ -15,8 +15,7 @@ import {
 } from "node:fs";
 import { createServer as createHttpsServer } from "node:https";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { deflateSync, inflateSync } from "node:zlib";
 import { generateSecret, generateURI, verifySync } from "otplib";
 import QRCode from "qrcode";
@@ -33,12 +32,14 @@ import {
   User as MongoUser,
 } from "./models/index.js";
 
-const IS_NETLIFY = process.env.NETLIFY === "true";
+const PROJECT_DIR = process.cwd();
+const BACKEND_DIR = existsSync(join(PROJECT_DIR, "server.js"))
+  ? PROJECT_DIR
+  : join(PROJECT_DIR, "backend");
+const IS_NETLIFY = process.env.NETLIFY === "true" || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
 const IS_VERCEL = process.env.VERCEL === "1";
 const IS_SERVERLESS = IS_NETLIFY || IS_VERCEL;
-const __dirname = IS_NETLIFY
-  ? join(process.cwd(), "backend")
-  : dirname(fileURLToPath(import.meta.url));
+const __dirname = BACKEND_DIR;
 const app = express();
 const PORT = process.env.API_PORT || process.env.PORT || 5000;
 const USE_HTTPS = process.env.USE_HTTPS === "true";
