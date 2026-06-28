@@ -11,6 +11,10 @@
     "start": "npm --prefix backend run start"
   },
   "dependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "serverless-http": "^4.0.0"
+  },
+  "devDependencies": {
+    "@netlify/plugin-nextjs": "^5.15.12"
   }
 }

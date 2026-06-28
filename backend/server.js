@@ -3433,7 +3433,24 @@ async function startServer() {
   }
 }
 
-if (process.env.VERCEL !== "1") {
+let runtimeReady;
+
+export async function initializeRuntime() {
+  if (!runtimeReady) {
+    runtimeReady = (async () => {
+      ensureDatabase();
+      try {
+        const connection = await connectDB();
+        if (connection) await seedMongoData();
+      } catch (error) {
+        console.error("MongoDB startup failed:", error.message);
+      }
+    })();
+  }
+  return runtimeReady;
+}
+
+if (process.env.VERCEL !== "1" && process.env.NETLIFY !== "true") {
   startServer();
 }
 
