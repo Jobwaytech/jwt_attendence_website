@@ -582,12 +582,7 @@ async function sendLoginOtpEmail(user, otp) {
   }
 
   const transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_PORT === 465,
-    family: 4,
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
+    service :'gmail',
     auth: { user: SMTP_USER, pass: SMTP_PASS },
   });
   await transporter.sendMail({
