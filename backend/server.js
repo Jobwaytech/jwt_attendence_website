@@ -735,12 +735,14 @@ function requireAuth(req, res, next) {
 
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    const sessions = readJson(FILES.sessions, []);
-    const session = sessions.find(
-      (item) => item.id === payload.sessionId && !item.revokedAt,
-    );
-    if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
-      return res.status(401).json({ message: "Session expired or revoked." });
+    if (!IS_SERVERLESS) {
+      const sessions = readJson(FILES.sessions, []);
+      const session = sessions.find(
+        (item) => item.id === payload.sessionId && !item.revokedAt,
+      );
+      if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
+        return res.status(401).json({ message: "Session expired or revoked." });
+      }
     }
     const user = readUsers().find((item) => item.id === payload.id);
     if (!user)
