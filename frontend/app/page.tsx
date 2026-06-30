@@ -93,7 +93,6 @@ type User = {
   salary?: number;
   provider?: string;
   picture?: string;
-  twoFactorEnabled?: boolean;
   createdAt?: string;
 };
 
@@ -293,16 +292,6 @@ type RegularizationRequest = {
 };
 
 type SessionResponse = {
-  requires2fa?: boolean;
-  requires2faSetup?: boolean;
-  requiresEmailOtp?: boolean;
-  twoFactorToken?: string;
-  twoFactorSetupToken?: string;
-  emailOtpToken?: string;
-  devOtp?: string;
-  qrCodeDataUrl?: string;
-  manualEntryKey?: string;
-  message?: string;
   token?: string;
   user?: User;
 };
@@ -916,14 +905,6 @@ export default function Home() {
     password: "",
     role: "super_admin" as Role,
   });
-  const [twoFactorToken, setTwoFactorToken] = useState("");
-  const [twoFactorSetupToken, setTwoFactorSetupToken] = useState("");
-  const [emailOtpToken, setEmailOtpToken] = useState("");
-  const [devEmailOtp, setDevEmailOtp] = useState("");
-  const [twoFactorSetupQr, setTwoFactorSetupQr] = useState("");
-  const [twoFactorSetupKey, setTwoFactorSetupKey] = useState("");
-  const [twoFactorMessage, setTwoFactorMessage] = useState("");
-  const [twoFactorCode, setTwoFactorCode] = useState("");
   const [resetEmail, setResetEmail] = useState("");
   const [resetToken, setResetToken] = useState("");
   const [users, setUsers] = useState<User[]>([]);
@@ -976,6 +957,9 @@ export default function Home() {
   const [taskDrafts, setTaskDrafts] = useState<
     Record<string, { status: TaskStatus; progress: number; remarks: string }>
   >({});
+  const [passwordDrafts, setPasswordDrafts] = useState<Record<string, string>>(
+    {},
+  );
   const [cameraOn, setCameraOn] = useState(false);
   const [faceSamples, setFaceSamples] = useState<FaceSample[]>([]);
   const [verificationBusy, setVerificationBusy] = useState(false);
@@ -1604,61 +1588,11 @@ export default function Home() {
   }
 
   async function completeLogin(result: SessionResponse) {
-    if (result.requiresEmailOtp && result.emailOtpToken) {
-      setEmailOtpToken(result.emailOtpToken);
-      setDevEmailOtp(result.devOtp || "");
-      setTwoFactorToken("");
-      setTwoFactorSetupToken("");
-      setTwoFactorSetupQr("");
-      setTwoFactorSetupKey("");
-      setTwoFactorMessage(
-        result.message || "Enter the OTP sent to the login email.",
+    if (!result.user || !result.token) {
+      throw new Error(
+        "Login succeeded but no session was returned. Restart the API server so the latest password-only login code is running.",
       );
-      setTwoFactorCode("");
-      setError("");
-      return;
     }
-    if (result.requires2fa && result.twoFactorToken) {
-      setEmailOtpToken("");
-      setDevEmailOtp("");
-      setTwoFactorToken(result.twoFactorToken);
-      setTwoFactorSetupToken("");
-      setTwoFactorSetupQr("");
-      setTwoFactorSetupKey("");
-      setTwoFactorMessage(
-        result.message || "Enter your authenticator code to finish login.",
-      );
-      setTwoFactorCode("");
-      setError("");
-      return;
-    }
-    if (
-      result.requires2faSetup &&
-      result.twoFactorSetupToken &&
-      result.qrCodeDataUrl
-    ) {
-      setEmailOtpToken("");
-      setDevEmailOtp("");
-      setTwoFactorToken("");
-      setTwoFactorSetupToken(result.twoFactorSetupToken);
-      setTwoFactorSetupQr(result.qrCodeDataUrl);
-      setTwoFactorSetupKey(result.manualEntryKey || "");
-      setTwoFactorMessage(
-        result.message || "Set up two-step verification to continue.",
-      );
-      setTwoFactorCode("");
-      setError("");
-      return;
-    }
-    if (!result.user || !result.token) return;
-    setEmailOtpToken("");
-    setDevEmailOtp("");
-    setTwoFactorToken("");
-    setTwoFactorSetupToken("");
-    setTwoFactorSetupQr("");
-    setTwoFactorSetupKey("");
-    setTwoFactorMessage("");
-    setTwoFactorCode("");
     saveSession(result.user, result.token);
     await loadWorkspace(result.user);
     setView("dashboard");
@@ -1669,11 +1603,6 @@ export default function Home() {
     event.preventDefault();
     try {
       clearSavedSession();
-      setEmailOtpToken("");
-      setDevEmailOtp("");
-      setTwoFactorToken("");
-      setTwoFactorSetupToken("");
-      setTwoFactorCode("");
       const result = await apiRequest<SessionResponse>("/api/login", {
         method: "POST",
         body: JSON.stringify({
@@ -1685,33 +1614,6 @@ export default function Home() {
       await completeLogin(result);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Login failed.");
-    }
-  }
-
-  async function handleTwoFactorLogin(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    try {
-      const endpoint = emailOtpToken
-        ? "/api/admin-otp/verify-login"
-        : twoFactorSetupToken
-          ? "/api/2fa/complete-required-setup"
-          : "/api/2fa/verify-login";
-      const payload = emailOtpToken
-        ? { emailOtpToken, code: twoFactorCode }
-        : twoFactorSetupToken
-          ? { twoFactorSetupToken, code: twoFactorCode }
-          : { twoFactorToken, code: twoFactorCode };
-      const result = await apiRequest<SessionResponse>(endpoint, {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      await completeLogin(result);
-    } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "Two-step verification failed.",
-      );
     }
   }
 
@@ -1868,6 +1770,29 @@ export default function Home() {
     } catch (caught) {
       toast(
         caught instanceof Error ? caught.message : "Unable to delete user.",
+        true,
+      );
+    }
+  }
+
+  async function changeUserPassword(user: User) {
+    if (session?.role !== "super_admin") {
+      toast("Only Super Admin can change passwords.", true);
+      return;
+    }
+    const password = String(passwordDrafts[user.id] || "");
+    if (password.length < 6) {
+      toast("Password must be at least 6 characters.", true);
+      return;
+    }
+    try {
+      await mongoUpdate("users", user.id, { password });
+      setPasswordDrafts((current) => ({ ...current, [user.id]: "" }));
+      await loadWorkspace();
+      toast(`Password updated for ${displayName(user.name)}.`);
+    } catch (caught) {
+      toast(
+        caught instanceof Error ? caught.message : "Unable to update password.",
         true,
       );
     }
@@ -2659,67 +2584,6 @@ export default function Home() {
             </button>
           </form>
 
-          {emailOtpToken || twoFactorToken ? (
-            <form className="two-factor-card" onSubmit={handleTwoFactorLogin}>
-              <ShieldCheck />
-              <div>
-                <strong>
-                  {emailOtpToken
-                    ? "Email OTP verification"
-                    : "Two-step verification"}
-                </strong>
-                <p>
-                  {twoFactorMessage ||
-                    (emailOtpToken
-                      ? "Enter the OTP sent to the login email."
-                      : "Enter your authenticator code to finish login.")}
-                </p>
-                {devEmailOtp ? (
-                  <small>Local test OTP: {devEmailOtp}</small>
-                ) : null}
-              </div>
-              <input
-                value={twoFactorCode}
-                onChange={(event) => setTwoFactorCode(event.target.value)}
-                placeholder={emailOtpToken ? "Email OTP" : "Authenticator code"}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                required
-              />
-              <button className="primary-button" type="submit">
-                Verify code
-              </button>
-            </form>
-          ) : null}
-
-          {twoFactorSetupToken ? (
-            <form className="two-factor-card" onSubmit={handleTwoFactorLogin}>
-              <ShieldCheck />
-              <div>
-                <strong>Set up two-step verification</strong>
-                <p>
-                  {twoFactorMessage ||
-                    "Scan this QR code in an authenticator app, then enter the 6-digit code."}
-                </p>
-              </div>
-              <img src={twoFactorSetupQr} alt="Two-step verification QR code" />
-              {twoFactorSetupKey ? (
-                <small>Manual key: {twoFactorSetupKey}</small>
-              ) : null}
-              <input
-                value={twoFactorCode}
-                onChange={(event) => setTwoFactorCode(event.target.value)}
-                placeholder="Authenticator code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                required
-              />
-              <button className="primary-button" type="submit">
-                Enable and enter portal
-              </button>
-            </form>
-          ) : null}
-
           <div className="reset-box">
             <input
               value={resetEmail}
@@ -3189,6 +3053,29 @@ export default function Home() {
                       {user.dob ? `DOB ${formatDate(user.dob)}` : "DOB not set"}
                     </span>
                   </div>
+                  {session.role === "super_admin" ? (
+                    <div className="reset-box user-password-reset">
+                      <input
+                        type="password"
+                        value={passwordDrafts[user.id] || ""}
+                        onChange={(event) =>
+                          setPasswordDrafts((current) => ({
+                            ...current,
+                            [user.id]: event.target.value,
+                          }))
+                        }
+                        placeholder="New password"
+                        autoComplete="new-password"
+                      />
+                      <button
+                        className="ghost-button"
+                        type="button"
+                        onClick={() => changeUserPassword(user)}
+                      >
+                        <LockKeyhole /> Change
+                      </button>
+                    </div>
+                  ) : null}
                   <button
                     className="danger-button"
                     disabled={user.id === session.id}
@@ -4651,20 +4538,18 @@ export default function Home() {
               <div>
                 <h1>Security</h1>
                 <p>
-                  Password hashing, JWT sessions, logout revocation, and 2FA
-                  setup are handled by the API.
+                  Password hashing, JWT sessions, and logout revocation are
+                  handled by the API.
                 </p>
               </div>
             </div>
             <div className="security-intro">
               <ShieldCheck />
               <div>
-                <strong>
-                  {session.twoFactorEnabled ? "2FA enabled" : "2FA available"}
-                </strong>
+                <strong>Session secured</strong>
                 <p>
-                  Use authenticator app routes on the backend to enable or
-                  disable 2FA for this account.
+                  Login uses the selected role, stored password hash, and JWT
+                  session token.
                 </p>
               </div>
             </div>

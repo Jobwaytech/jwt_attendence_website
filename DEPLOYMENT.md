@@ -46,18 +46,12 @@ JWT_SECRET=replace-with-a-long-random-secret
 MONGODB_URI=mongodb+srv://...
 ALLOWED_ORIGINS=https://your-vercel-app.vercel.app
 ADMIN_EMAILS=your-admin@email.com,superadmin@example.com
-ADMIN_OTP_RECIPIENTS=yarasanilikhithreddy08@gmail.com,jobwaytech@gmail.com,mdjobwaytech@gmail.com
-BRANCH_ADMIN_OTP_RECIPIENTS=mplbranch.jwt@gmail.com
+BRANCH_ADMIN_EMAILS=branch-admin@email.com
 COMPANY_LATITUDE=17.4486
 COMPANY_LONGITUDE=78.3908
 ATTENDANCE_LOCATION_RADIUS_METERS=150
 FACE_MATCH_THRESHOLD=85
 GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASS=your-app-password
-MAIL_FROM=your-email@gmail.com
 ```
 
 After deployment, confirm:
@@ -96,7 +90,7 @@ Test these flows on the live Vercel URL:
 - Dashboard loads without console/API errors.
 - Attendance pages load.
 - Leave/task/calendar/report pages load.
-- Password reset behavior works with SMTP configured.
+- Password reset behavior works.
 
 ## Notes
 

@@ -4,10 +4,8 @@ import "dotenv/config";
 import express from "express";
 import { OAuth2Client } from "google-auth-library";
 import jwt from "jsonwebtoken";
-import nodemailer from "nodemailer";
-import { randomBytes, randomInt, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import {
-  appendFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -17,8 +15,6 @@ import { createServer as createHttpsServer } from "node:https";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync, inflateSync } from "node:zlib";
-import { generateSecret, generateURI, verifySync } from "otplib";
-import QRCode from "qrcode";
 import { connectDB, isMongoConnected } from "./config/db.js";
 import { registerFaceAttendanceRoutes } from "./routes/faceAttendance.js";
 import { registerMongoCrudRoutes } from "./routes/mongoCrud.js";
@@ -56,47 +52,24 @@ const HTTPS_CERT_PATH =
 const JWT_SECRET =
   process.env.JWT_SECRET || "change-this-secret-before-production";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
-const EMAIL_USERNAME = process.env.EMAIL_USERNAME || process.env.SMTP_USER || "";
-const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD || process.env.SMTP_PASS || "";
-const SMTP_HOST = process.env.SMTP_HOST || "";
-const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
-const SMTP_USER = EMAIL_USERNAME;
-const SMTP_PASS = EMAIL_PASSWORD;
-const MAIL_FROM =
-  process.env.MAIL_FROM || EMAIL_USERNAME || "no-reply@authflow.local";
-const ADMIN_OTP_RECIPIENTS = (
-  process.env.ADMIN_OTP_RECIPIENTS ||
-  process.env.ADMIN_OTP_RECIPIENT ||
-  "jobwaytech@gmail.com,mdjobwaytech@gmail.com"
-)
-  .split(",")
-  .map((email) => email.trim().toLowerCase())
-  .filter(Boolean);
-const BRANCH_ADMIN_OTP_RECIPIENTS = (
-  process.env.BRANCH_ADMIN_OTP_RECIPIENTS || "mplbranch.jwt@gmail.com"
-)
-  .split(",")
-  .map((email) => email.trim().toLowerCase())
-  .filter(Boolean);
 const ADMIN_EMAILS = (
   process.env.ADMIN_EMAILS || "jobwaytech@gmail.com,mdjobwaytech@gmail.com"
 )
   .split(",")
   .map((email) => email.trim().toLowerCase())
   .filter(Boolean);
-const ADMIN_OTP_EMAILS = (
-  process.env.ADMIN_OTP_EMAILS ||
-  "jobwaytech@gmail.com,mdjobwaytech@gmail.com,mplbranch.jwt@gmail.com"
-)
+const BRANCH_ADMIN_EMAILS = (process.env.BRANCH_ADMIN_EMAILS || "")
   .split(",")
   .map((email) => email.trim().toLowerCase())
   .filter(Boolean);
+const PORTAL_ADMIN_PASSWORD = process.env.PORTAL_ADMIN_PASSWORD || "";
+const PORTAL_BRANCH_ADMIN_PASSWORD =
+  process.env.PORTAL_BRANCH_ADMIN_PASSWORD || "";
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
 const DATA_DIR = process.env.DATA_DIR || join(IS_SERVERLESS ? tmpdir() : __dirname, "data");
-const DEV_LOGIN_OTP_LOG = join(DATA_DIR, "dev-login-otps.log");
 const PUBLIC_DIR = join(FRONTEND_DIR, "public");
 const PAYSLIP_LOGO_PATHS = [
   join(PUBLIC_DIR, "assets", "job-way-tech-logo.png"),
@@ -125,7 +98,6 @@ const FILES = {
   attendanceRegularization: join(DATA_DIR, "attendance-regularization.json"),
   sessions: join(DATA_DIR, "sessions.json"),
   resetTokens: join(DATA_DIR, "reset-tokens.json"),
-  emailOtpChallenges: join(DATA_DIR, "email-otp-challenges.json"),
   notifications: join(DATA_DIR, "notifications.json"),
 };
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
@@ -139,7 +111,6 @@ const ROLE_LABELS = {
 const STAFF_ROLES = ["branch_admin", "employee"];
 const ASSIGNABLE_ROLES = ["branch_admin", "employee", "student"];
 const MANAGER_ROLES = ["super_admin", "branch_admin"];
-const ADMIN_2FA_REQUIRED_ROLES = ["super_admin", "branch_admin"];
 const TASK_STATUSES = [
   "pending",
   "in_progress",
@@ -170,10 +141,13 @@ app.set("trust proxy", 1);
 app.use(
   cors({
     origin(origin, callback) {
+      const isCloudflareQuickTunnel =
+        origin && /^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/i.test(origin);
       if (
         !origin ||
         !ALLOWED_ORIGINS.length ||
-        ALLOWED_ORIGINS.includes(origin)
+        ALLOWED_ORIGINS.includes(origin) ||
+        isCloudflareQuickTunnel
       )
         return callback(null, true);
       return callback(new Error("Not allowed by CORS"));
@@ -305,6 +279,50 @@ function validRole(role) {
 }
 
 function ensureDemoUsers(users) {
+  const upsertDemoUser = ({ email, password, role, branchId }) => {
+    if (!email || !password) return;
+    const existing = users.find((user) => user.email === email);
+    const name = email
+      .split("@")[0]
+      .replace(/[._-]+/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+    const nextUser = {
+      ...(existing || {}),
+      id: existing?.id || randomUUID(),
+      name: existing?.name || name,
+      email,
+      passwordHash: bcrypt.hashSync(password, 10),
+      role,
+      branchId: branchId || null,
+      provider: "password",
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (existing) Object.assign(existing, nextUser);
+    else users.push(nextUser);
+  };
+
+  for (const email of ADMIN_EMAILS) {
+    upsertDemoUser({
+      email,
+      password: PORTAL_ADMIN_PASSWORD,
+      role: "super_admin",
+      branchId: null,
+    });
+  }
+
+  const branches = readJson(FILES.branches, []);
+  const defaultBranch = branches.find((branch) => branch.code === "MPL") || branches[0];
+  for (const email of BRANCH_ADMIN_EMAILS) {
+    upsertDemoUser({
+      email,
+      password: PORTAL_BRANCH_ADMIN_PASSWORD,
+      role: "branch_admin",
+      branchId: defaultBranch?.id || null,
+    });
+  }
+
   return users;
 }
 
@@ -404,8 +422,6 @@ function mongoUserToLocalUser(mongoUser) {
     studentId: mongoUser.studentId || undefined,
     salary: mongoUser.salary ?? undefined,
     provider: mongoUser.provider || "password",
-    twoFactorEnabled: Boolean(mongoUser.twoFactorEnabled),
-    twoFactorSecret: mongoUser.twoFactorSecret || null,
     picture: mongoUser.picture || "",
     faceSignature:
       mongoUser.faceSignature ||
@@ -492,8 +508,6 @@ function seedOperationalData() {
 function publicUser(user) {
   const {
     passwordHash,
-    twoFactorSecret,
-    pendingTwoFactorSecret,
     resetToken,
     ...safeUser
   } = user;
@@ -520,204 +534,10 @@ function createToken(user) {
   return token;
 }
 
-function createTwoFactorToken(user) {
-  return jwt.sign({ id: user.id, purpose: "2fa" }, JWT_SECRET, {
-    expiresIn: "5m",
-  });
-}
-
-function createTwoFactorSetupToken(user) {
-  return jwt.sign({ id: user.id, purpose: "2fa_setup" }, JWT_SECRET, {
-    expiresIn: "10m",
-  });
-}
-
-function createEmailOtpToken(user, challengeId) {
-  return jwt.sign(
-    { id: user.id, challengeId, purpose: "email_otp" },
-    JWT_SECRET,
-    { expiresIn: "5m" },
-  );
-}
-
-function verifyTwoFactorToken(token) {
-  const payload = jwt.verify(token, JWT_SECRET);
-  if (payload.purpose !== "2fa") throw new Error("Invalid 2FA token.");
-  return payload;
-}
-
-function verifyTwoFactorSetupToken(token) {
-  const payload = jwt.verify(token, JWT_SECRET);
-  if (payload.purpose !== "2fa_setup")
-    throw new Error("Invalid 2FA setup token.");
-  return payload;
-}
-
-function verifyEmailOtpToken(token) {
-  const payload = jwt.verify(token, JWT_SECRET);
-  if (payload.purpose !== "email_otp")
-    throw new Error("Invalid email OTP token.");
-  return payload;
-}
-
-function adminRequiresTwoFactor(user) {
-  return (
-    ADMIN_2FA_REQUIRED_ROLES.includes(normalizeRole(user.role)) ||
-    ADMIN_OTP_EMAILS.includes(String(user.email || "").toLowerCase())
-  );
-}
-
-async function createRequiredTwoFactorSetup(user) {
-  const users = readUsers();
-  const storedUser = users.find((item) => item.id === user.id);
-  if (!storedUser) throw new Error("User not found.");
-  const secret = generateSecret();
-  const otpauth = generateURI({
-    issuer: "AuthFlow",
-    label: storedUser.email,
-    secret,
-  });
-  storedUser.pendingTwoFactorSecret = secret;
-  writeUsers(users);
-  return {
-    requires2faSetup: true,
-    twoFactorSetupToken: createTwoFactorSetupToken(storedUser),
-    qrCodeDataUrl: await QRCode.toDataURL(otpauth),
-    manualEntryKey: secret,
-    message:
-      "Set up two-step verification to continue. Admin accounts cannot enter the portal without it.",
-  };
-}
-
-function mailTransportReady() {
-  return Boolean(EMAIL_USERNAME && EMAIL_PASSWORD);
-}
-
-function createMailTransporter() {
-  const auth = { user: EMAIL_USERNAME, pass: EMAIL_PASSWORD };
-  const useGmailService =
-    !SMTP_HOST || SMTP_HOST.toLowerCase() === "smtp.gmail.com";
-
-  if (useGmailService) {
-    return nodemailer.createTransport({
-      service: "gmail",
-      connectionTimeout: 15000,
-      greetingTimeout: 15000,
-      socketTimeout: 20000,
-      auth,
-    });
-  }
-
-  return nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_PORT === 465,
-    family: 4,
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 20000,
-    auth,
-  });
-}
-
-function otpRecipientsForUser(user) {
-  const role = normalizeRole(user.role);
-  if (role === "branch_admin")
-    return BRANCH_ADMIN_OTP_RECIPIENTS.length
-      ? BRANCH_ADMIN_OTP_RECIPIENTS
-      : [user.email];
-  if (role === "super_admin")
-    return ADMIN_OTP_RECIPIENTS.length ? ADMIN_OTP_RECIPIENTS : [user.email];
-  return [user.email];
-}
-
-async function sendLoginOtpEmail(user, otp) {
-  const otpRecipients = otpRecipientsForUser(user);
-  const recipientText = otpRecipients.join(", ");
-  const subject = "Your AuthFlow login OTP";
-  const text = `Your login OTP for ${user.email} is ${otp}. It expires in 5 minutes. If you did not request this login, ignore this email.`;
-
-  if (!mailTransportReady()) {
-    console.warn(`[DEV LOGIN OTP] ${user.email} -> ${recipientText}: ${otp}`);
-    appendFileSync(
-      DEV_LOGIN_OTP_LOG,
-      `${new Date().toISOString()} ${user.email} ${recipientText} ${otp}\n`,
-    );
-    return { delivered: false, devOtp: otp, recipient: recipientText };
-  }
-
-  const transporter = createMailTransporter();
-  try {
-    await transporter.sendMail({
-      from: MAIL_FROM,
-      to: otpRecipients,
-      subject,
-      text,
-    });
-    return { delivered: true, recipient: recipientText };
-  } catch (error) {
-    console.warn(
-      `[DEV LOGIN OTP FALLBACK] ${user.email} -> ${recipientText}: ${otp}`,
-      error?.message || error,
-    );
-    appendFileSync(
-      DEV_LOGIN_OTP_LOG,
-      `${new Date().toISOString()} ${user.email} ${recipientText} ${otp}\n`,
-    );
-    return { delivered: false, devOtp: otp, recipient: recipientText };
-  }
-}
-
-async function createEmailOtpChallenge(user) {
-  const otp = String(randomInt(100000, 1000000));
-  const challenge = {
-    id: randomUUID(),
-    userId: user.id,
-    codeHash: await bcrypt.hash(otp, 10),
-    createdAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-    attempts: 0,
-    consumedAt: null,
-  };
-  const challenges = readJson(FILES.emailOtpChallenges, []);
-  const activeChallenges = challenges.filter(
-    (item) =>
-      item.userId !== user.id ||
-      item.consumedAt ||
-      new Date(item.expiresAt).getTime() <= Date.now(),
-  );
-  activeChallenges.push(challenge);
-  writeJson(FILES.emailOtpChallenges, activeChallenges);
-
-  const delivery = await sendLoginOtpEmail(user, otp);
-  return {
-    requiresEmailOtp: true,
-    emailOtpToken: createEmailOtpToken(user, challenge.id),
-    message: delivery.delivered
-      ? `Enter the OTP sent to ${delivery.recipient}.`
-      : `Email is not configured yet. Use the local test OTP below for ${delivery.recipient}.`,
-    devOtp: delivery.delivered ? undefined : delivery.devOtp,
-  };
-}
-
 async function authResponseFor(user) {
-  if (adminRequiresTwoFactor(user)) {
-    return createEmailOtpChallenge(user);
-  }
-
-  if (user.twoFactorEnabled) {
-    return {
-      requires2fa: true,
-      twoFactorToken: createTwoFactorToken(user),
-      message: "Enter your authenticator code to finish login.",
-    };
-  }
-
   return {
-    requires2fa: false,
     token: createToken(user),
     user: publicUser(user),
-    needs2faSetup: !user.twoFactorEnabled,
   };
 }
 
@@ -1808,8 +1628,6 @@ app.post("/api/register", async (req, res) => {
         : undefined,
     salary: STAFF_ROLES.includes(role) ? salary : undefined,
     provider: "password",
-    twoFactorEnabled: false,
-    twoFactorSecret: null,
     faceSignature: ["employee", "student"].includes(role)
       ? "not-enrolled"
       : undefined,
@@ -1993,8 +1811,6 @@ app.post("/api/google-login", async (req, res) => {
         provider: "google",
         googleSub: payload.sub,
         picture: payload.picture,
-        twoFactorEnabled: false,
-        twoFactorSecret: null,
         createdAt: new Date().toISOString(),
       };
       users.push(user);
@@ -2007,114 +1823,6 @@ app.post("/api/google-login", async (req, res) => {
     res.json(await authResponseFor(user));
   } catch {
     res.status(401).json({ message: "Google sign-in verification failed." });
-  }
-});
-
-app.post("/api/2fa/verify-login", (req, res) => {
-  const twoFactorToken = String(req.body.twoFactorToken || "");
-  const code = String(req.body.code || "").replace(/\s/g, "");
-  try {
-    const payload = verifyTwoFactorToken(twoFactorToken);
-    const user = readUsers().find((item) => item.id === payload.id);
-    if (!user?.twoFactorEnabled || !user.twoFactorSecret)
-      return res
-        .status(401)
-        .json({ message: "2FA verification is not available for this user." });
-    if (!verifySync({ token: code, secret: user.twoFactorSecret }))
-      return res.status(401).json({ message: "Invalid authenticator code." });
-    res.json({
-      token: createToken(user),
-      user: publicUser(user),
-      requires2fa: false,
-    });
-  } catch {
-    res.status(401).json({ message: "Invalid or expired 2FA login session." });
-  }
-});
-
-app.post("/api/admin-otp/verify-login", async (req, res) => {
-  const emailOtpToken = String(req.body.emailOtpToken || "");
-  const code = String(req.body.code || "").replace(/\D/g, "");
-  try {
-    const payload = verifyEmailOtpToken(emailOtpToken);
-    const users = readUsers();
-    const user = users.find((item) => item.id === payload.id);
-    if (!user || !adminRequiresTwoFactor(user))
-      return res
-        .status(401)
-        .json({
-          message: "Email OTP verification is not available for this account.",
-        });
-
-    const challenges = readJson(FILES.emailOtpChallenges, []);
-    const challenge = challenges.find(
-      (item) => item.id === payload.challengeId && item.userId === user.id,
-    );
-    if (!challenge || challenge.consumedAt)
-      return res
-        .status(401)
-        .json({ message: "Invalid or expired OTP session." });
-    if (new Date(challenge.expiresAt).getTime() < Date.now())
-      return res
-        .status(401)
-        .json({ message: "OTP expired. Login again to receive a new OTP." });
-    if (challenge.attempts >= 5)
-      return res
-        .status(429)
-        .json({
-          message: "Too many OTP attempts. Login again to receive a new OTP.",
-        });
-
-    challenge.attempts += 1;
-    const valid =
-      code.length === 6 && (await bcrypt.compare(code, challenge.codeHash));
-    if (!valid) {
-      writeJson(FILES.emailOtpChallenges, challenges);
-      return res.status(401).json({ message: "Invalid OTP." });
-    }
-
-    challenge.consumedAt = new Date().toISOString();
-    writeJson(FILES.emailOtpChallenges, challenges);
-    res.json({
-      token: createToken(user),
-      user: publicUser(user),
-      requiresEmailOtp: false,
-    });
-  } catch {
-    res.status(401).json({ message: "Invalid or expired OTP session." });
-  }
-});
-
-app.post("/api/2fa/complete-required-setup", (req, res) => {
-  const twoFactorSetupToken = String(req.body.twoFactorSetupToken || "");
-  const code = String(req.body.code || "").replace(/\s/g, "");
-  try {
-    const payload = verifyTwoFactorSetupToken(twoFactorSetupToken);
-    const users = readUsers();
-    const user = users.find((item) => item.id === payload.id);
-    if (!user || !adminRequiresTwoFactor(user))
-      return res
-        .status(401)
-        .json({ message: "Two-step setup is not required for this account." });
-    if (!user.pendingTwoFactorSecret)
-      return res
-        .status(400)
-        .json({ message: "Start two-step verification setup again." });
-    if (!verifySync({ token: code, secret: user.pendingTwoFactorSecret }))
-      return res.status(401).json({ message: "Invalid authenticator code." });
-    user.twoFactorSecret = user.pendingTwoFactorSecret;
-    user.twoFactorEnabled = true;
-    delete user.pendingTwoFactorSecret;
-    writeUsers(users);
-    res.json({
-      token: createToken(user),
-      user: publicUser(user),
-      requires2fa: false,
-    });
-  } catch {
-    res
-      .status(401)
-      .json({ message: "Invalid or expired two-step setup session." });
   }
 });
 
@@ -3343,56 +3051,6 @@ registerFaceAttendanceRoutes(app, { requireAuth });
 registerStudentPortalRoutes(app, { requireAuth });
 registerProductionFeatureRoutes(app, { requireAuth, createToken });
 registerMongoCrudRoutes(app, { requireAuth });
-
-app.post("/api/2fa/setup", requireAuth, async (req, res) => {
-  const users = readUsers();
-  const user = users.find((item) => item.id === req.user.id);
-  const secret = generateSecret();
-  const otpauth = generateURI({
-    issuer: "AuthFlow",
-    label: user.email,
-    secret,
-  });
-  user.pendingTwoFactorSecret = secret;
-  writeUsers(users);
-  res.json({ secret, qrCodeDataUrl: await QRCode.toDataURL(otpauth) });
-});
-
-app.post("/api/2fa/enable", requireAuth, (req, res) => {
-  const code = String(req.body.code || "").replace(/\s/g, "");
-  const users = readUsers();
-  const user = users.find((item) => item.id === req.user.id);
-  if (!user?.pendingTwoFactorSecret)
-    return res.status(400).json({ message: "Start 2FA setup first." });
-  if (!verifySync({ token: code, secret: user.pendingTwoFactorSecret }))
-    return res.status(401).json({ message: "Invalid authenticator code." });
-  user.twoFactorSecret = user.pendingTwoFactorSecret;
-  user.twoFactorEnabled = true;
-  delete user.pendingTwoFactorSecret;
-  writeUsers(users);
-  res.json({ user: publicUser(user) });
-});
-
-app.post("/api/2fa/disable", requireAuth, (req, res) => {
-  const code = String(req.body.code || "").replace(/\s/g, "");
-  const users = readUsers();
-  const user = users.find((item) => item.id === req.user.id);
-  if (user && adminRequiresTwoFactor(user))
-    return res
-      .status(403)
-      .json({
-        message:
-          "Two-step verification is required for admin accounts and cannot be disabled.",
-      });
-  if (!user?.twoFactorEnabled || !user.twoFactorSecret)
-    return res.status(400).json({ message: "2FA is not enabled." });
-  if (!verifySync({ token: code, secret: user.twoFactorSecret }))
-    return res.status(401).json({ message: "Invalid authenticator code." });
-  user.twoFactorSecret = null;
-  user.twoFactorEnabled = false;
-  writeUsers(users);
-  res.json({ user: publicUser(user) });
-});
 
 app.use((error, _req, res, next) => {
   if (!error) return next();

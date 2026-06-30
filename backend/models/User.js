@@ -40,8 +40,6 @@ const userSchema = new mongoose.Schema(
     },
     googleSub: { type: String, trim: true },
     picture: { type: String, trim: true },
-    twoFactorEnabled: { type: Boolean, default: false },
-    twoFactorSecret: { type: String, default: null },
     faceSignature: { type: String, trim: true },
     trustedDevices: {
       type: [

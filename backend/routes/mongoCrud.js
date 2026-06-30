@@ -253,14 +253,19 @@ export function registerMongoCrudRoutes(app, { requireAuth }) {
         if (req.mongoResource.key === "users") {
           const plainPassword = String(body.password || "");
           if (plainPassword) {
+            if (req.user?.role !== "super_admin") {
+              return res
+                .status(403)
+                .json({ message: "Only Super Admin can change passwords." });
+            }
             body.passwordHash = await bcrypt.hash(plainPassword, 10);
           }
           delete body.password;
         }
         const item = await req.mongoResource.Model.findByIdAndUpdate(
           req.params.id,
-          req.body,
-          { returnDocument: 'after', runValidators: true },
+          body,
+          { returnDocument: "after", runValidators: true },
         );
         if (!item)
           return res.status(404).json({ message: "Record not found." });

@@ -6,7 +6,7 @@ import Branch from "../models/Branch.js";
 import User from "../models/User.js";
 
 const password = process.env.PORTAL_BRANCH_ADMIN_PASSWORD || process.argv[2];
-const emails = (process.env.BRANCH_ADMIN_EMAILS || process.env.BRANCH_ADMIN_OTP_RECIPIENTS || "")
+const emails = (process.env.BRANCH_ADMIN_EMAILS || "")
   .split(",")
   .map((email) => email.trim().toLowerCase())
   .filter(Boolean);
@@ -17,7 +17,7 @@ if (!password || password.length < 6) {
 }
 
 if (!emails.length) {
-  console.error("BRANCH_ADMIN_EMAILS or BRANCH_ADMIN_OTP_RECIPIENTS is empty.");
+  console.error("BRANCH_ADMIN_EMAILS is empty.");
   process.exit(1);
 }
 

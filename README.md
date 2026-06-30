@@ -11,7 +11,6 @@ This project now implements phase two of the portal: secure authentication, role
 - RBAC roles: Super Admin, Branch Admin, Employee, Student
 - Separate role-aware login flow
 - Forgot password and reset-token API for demo/testing
-- Authenticator app 2FA routes
 - Multi-branch CRUD and branch-wise reports
 - Branch employee and branch student assignment tables
 - Employee and student attendance with camera capture, face-signature matching, duplicate attendance prevention, GPS clock-in/out validation, device capture, and invalid attendance reasons
@@ -50,7 +49,6 @@ Existing seeded accounts use only the four current RBAC roles.
 - Frontend: Next.js, React, TypeScript, CSS, lucide-react
 - Backend: Node.js, Express.js
 - Auth: bcryptjs, JSON Web Tokens, google-auth-library
-- 2FA: otplib, qrcode
 - Storage: local JSON files under `backend/data/`
 
 ## Database Files
@@ -209,9 +207,6 @@ npm run build
 - `GET /api/reports/monthly/export?format=pdf|excel`
 - `GET /api/notifications`
 - `GET /api/sessions`
-- `POST /api/2fa/setup`
-- `POST /api/2fa/enable`
-- `POST /api/2fa/disable`
 
 ## Security Note
 
