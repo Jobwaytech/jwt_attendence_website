@@ -8,6 +8,7 @@ import {
   Save,
   WalletCards,
 } from "lucide-react";
+import Image from "next/image";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { mongoList, mongoCreate, mongoUpdate } from "../services/api";
 import {
@@ -89,7 +90,7 @@ export default function PayrollModule({ mode }: PayrollModuleProps) {
     () =>
       employeeOptions.find((item) => item.id === draft.employeeId) ||
       employeeOptions[0],
-    [draft.employeeId],
+    [draft.employeeId, employeeOptions],
   );
   const previewRecord = useMemo(
     () => buildPayrollRecord(employee, draft, records),
@@ -733,10 +734,13 @@ function PayslipView({ payslip }: { payslip: PayslipRecord }) {
   return (
     <article className="payslip-sheet" data-print-payslip>
       <header className="payslip-header">
-        <img
+        <Image
           className="payslip-logo"
           src={JOBWAYTECH_LOGO_SRC}
           alt={JOBWAYTECH_LOGO_ALT}
+          width={84}
+          height={84}
+          unoptimized
         />
         <div className="payslip-brand">
           <h2>JOB WAY TECH CONSULTANT &amp; TRAINING</h2>

@@ -1,52 +1,48 @@
-# Deployment Guide
+# Render Deployment Guide
 
-This project is split into:
+Deploy this repository entirely on Render using two Web Services and MongoDB
+Atlas:
 
-- Backend API: Express app in `backend`.
-- Frontend: Next.js app in `frontend`.
-- Database: MongoDB, recommended on MongoDB Atlas.
-
-## Recommended Hosting
-
-- Backend: Render Web Service
-- Frontend: Vercel
-- Database: MongoDB Atlas
+- `authflow-api`: Express backend from `backend/`
+- `authflow-frontend`: Next.js frontend from `frontend/`
+- MongoDB Atlas: application database
 
 ## 1. MongoDB Atlas
 
-Create a MongoDB Atlas cluster and copy the connection string.
-
-Use it as:
+Create a MongoDB Atlas cluster and copy its connection string:
 
 ```env
 MONGODB_URI=mongodb+srv://...
 ```
 
-Allow network access for your backend host. During setup you can temporarily allow `0.0.0.0/0`, then tighten it later if your host supports stable outbound IPs.
+Allow network access from Render. Restrict the Atlas network rules when a
+stable outbound address is available.
 
-## 2. Backend on Render
+## 2. Backend Render Web Service
 
-Create a Render Web Service using the `backend` directory.
-
-Settings:
+Create a Render **Web Service** connected to this repository.
 
 ```text
+Name: authflow-api
 Root Directory: backend
+Runtime: Node
 Build Command: npm install
 Start Command: npm start
 Health Check Path: /api/health
 ```
 
-Environment variables:
+Set these environment variables:
 
 ```env
-PORT=10000
+NODE_ENV=production
 USE_HTTPS=false
 JWT_SECRET=replace-with-a-long-random-secret
 MONGODB_URI=mongodb+srv://...
-ALLOWED_ORIGINS=https://your-vercel-app.vercel.app
-ADMIN_EMAILS=your-admin@email.com,superadmin@example.com
-BRANCH_ADMIN_EMAILS=branch-admin@email.com
+ALLOWED_ORIGINS=https://authflow-frontend.onrender.com
+ADMIN_EMAILS=your-admin@email.com
+BRANCH_ADMIN_EMAILS=your-branch-admin@email.com
+PORTAL_ADMIN_PASSWORD=replace-with-a-strong-password
+PORTAL_BRANCH_ADMIN_PASSWORD=replace-with-a-strong-password
 COMPANY_LATITUDE=17.4486
 COMPANY_LONGITUDE=78.3908
 ATTENDANCE_LOCATION_RADIUS_METERS=150
@@ -54,47 +50,74 @@ FACE_MATCH_THRESHOLD=85
 GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 ```
 
-After deployment, confirm:
+Render supplies `PORT`; do not set a fixed production port. Keep
+`USE_HTTPS=false` because Render terminates HTTPS before forwarding traffic to
+the Node service.
 
-```text
-https://your-render-service.onrender.com/api/health
-```
-
-## 3. Frontend on Vercel
-
-Create a Vercel project using the `frontend` directory.
-
-Settings:
-
-```text
-Root Directory: frontend
-Framework Preset: Next.js
-Build Command: npm run build
-```
-
-Environment variables:
+For durable JSON session records, attach a Render persistent disk at
+`/var/data` and set:
 
 ```env
-API_BASE_URL=https://your-render-service.onrender.com
+DATA_DIR=/var/data/authflow
 ```
 
-Redeploy after adding environment variables.
+For uploaded files, configure Cloudinary:
+
+```env
+CLOUDINARY_CLOUD_NAME=your-cloud-name
+CLOUDINARY_UPLOAD_PRESET=your-upload-preset
+```
+
+After deployment, verify:
+
+```text
+https://authflow-api.onrender.com/api/health
+```
+
+## 3. Frontend Render Web Service
+
+Create a second Render **Web Service** from the same repository.
+
+```text
+Name: authflow-frontend
+Root Directory: frontend
+Runtime: Node
+Build Command: npm install && npm run build
+Start Command: npm start
+Health Check Path: /
+```
+
+Set:
+
+```env
+NODE_ENV=production
+API_BASE_URL=https://authflow-api.onrender.com
+```
+
+Replace the example service names with the actual Render URLs. Update the
+backend `ALLOWED_ORIGINS` value whenever the frontend Render URL changes, then
+redeploy both services.
 
 ## 4. Final Live Test
 
-Test these flows on the live Vercel URL:
+On the frontend Render URL, verify:
 
-- Login as super admin.
-- Create a user.
-- Login as employee/student.
-- Dashboard loads without console/API errors.
-- Attendance pages load.
-- Leave/task/calendar/report pages load.
-- Password reset behavior works.
+- Super Admin and Branch Admin login
+- Employee and Student login
+- User and branch management
+- Attendance camera and location permissions
+- Leave and regularization approval flows
+- Task assignment and employee task updates
+- Calendar events
+- Payroll and payslip downloads
+- PDF and CSV report exports
+- Logout and session revocation
 
-## Notes
+## Render Notes
 
-- Do not commit `.env`.
-- Use a strong `JWT_SECRET`.
-- Keep `USE_HTTPS=false` on Render. Render provides HTTPS at the platform edge.
-- Add your final Vercel domain to `ALLOWED_ORIGINS` on the backend.
+- Do not commit `.env` files.
+- Use a strong `JWT_SECRET` and administrator passwords.
+- MongoDB Atlas is the primary database.
+- Use a persistent Render disk for JSON session data.
+- Free Render services can sleep, so the first request after inactivity may be
+  slower.

@@ -27,22 +27,22 @@ This project now implements phase two of the portal: secure authentication, role
 
 The remaining work for Employee 3 includes completing the full Employee and Student Management Portal with all assigned modules: super admin login, branch admin login, employee login, and student login, along with JWT authentication, RBAC, password encryption, forgot password, and session management. Multi-branch management must include adding, editing, and deleting branches, storing branch name, branch code, address, manager, and contact details, and allocating employees and students branch-wise using branches, branch_employees, and branch_students tables. The employee portal must include face authentication attendance with clock in, clock out, date and time capture, attendance history, face match, duplicate face prevention, camera verification, and also precise login/logout location tracking where both locations must match or be within the allowed range, otherwise the user should be marked absent. Leave management must include casual leave, sick leave, permission requests, leave application form, status tracking, and Super Admin or Branch Admin approval or rejection. Task management must include team/group creation first, then assigning tasks group-wise or employee-wise, with daily task assignment, status update, priority, deadlines, remarks, and task status types like Pending, In Progress, Completed, Hold, and Rejected using tasks, task_assignments, and task_status tables. Monthly reports must include attendance report, task completion report, performance report, PDF export, and Excel export. Calendar management must include company holidays, employee events, meeting reminders, branch-wise holidays, event scheduler, notifications, and birthday popup wishes using DOB from registration. Payroll and payslip system must include salary details, monthly payslip generation, PDF payslip download, salary history, employee name, employee ID, branch, salary, deductions, net pay, payroll table, and salary_slips table. Attendance regularization must include attendance correction request, missing attendance request, shift adjustment request, and approval flow from Employee to Branch Admin to Super Admin. Final pending work also includes full backend/database connection, API integration, validations, responsive UI fixes, testing, debugging, and deployment.
 
-## Demo Accounts
+## Local Accounts
 
-All demo accounts use:
+Local login accounts are stored in MongoDB and `backend/data/users.json`.
+Their passwords are deployment-specific; the project does not publish a
+shared default password.
 
-```txt
-Password: 123456
+Configure the administrator email lists and passwords in `backend/.env`, then
+apply them with:
+
+```bash
+npm --prefix backend run set-admin-password
+npm --prefix backend run set-branch-admin-password
 ```
 
-```txt
-Super Admin:  superadmin@example.com
-Branch Admin: branchadmin@example.com
-Employee:     employee@example.com
-Student:      student@example.com
-```
-
-Existing seeded accounts use only the four current RBAC roles.
+Create Employee and Student accounts from the authenticated Users workspace.
+All accounts use one of the four current RBAC roles.
 
 ## Tech Stack
 

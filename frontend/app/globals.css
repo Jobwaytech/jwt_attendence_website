@@ -559,6 +559,17 @@ label {
   font-weight: 800;
 }
 
+.field-label {
+  align-content: start;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.field-label span {
+  line-height: 1;
+}
+
 input,
 select {
   width: 100%;
@@ -1712,10 +1723,10 @@ select:focus {
 
 .attendance-list-row {
   display: grid;
-  grid-template-columns: 72px minmax(160px, 1.4fr) minmax(130px, 1fr) minmax(
-      110px,
-      0.8fr
-    ) minmax(160px, 1.1fr) minmax(120px, 0.8fr);
+  grid-template-columns:
+    72px minmax(150px, 1.25fr) minmax(130px, 1fr) minmax(100px, 0.7fr)
+    minmax(140px, 1fr) minmax(92px, 0.65fr) minmax(92px, 0.65fr)
+    minmax(120px, 0.8fr);
   gap: 14px;
   align-items: center;
   padding: 14px 18px;
@@ -1912,7 +1923,154 @@ select:focus {
   align-content: start;
 }
 
+.card-topline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  position: relative;
+}
+
+.branch-topline > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.card-action-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.card-action-menu summary {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+}
+
+.card-action-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.card-action-menu summary::after {
+  content: "" !important;
+  display: none !important;
+}
+
+.branch-card .card-action-menu summary::after,
+.branch-card .card-action-menu[open] summary::after {
+  content: "" !important;
+  display: none !important;
+}
+
+.card-action-menu summary:hover,
+.card-action-menu[open] summary {
+  border-color: var(--primary);
+  color: var(--primary-strong);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+}
+
+.card-action-menu summary svg {
+  width: 18px;
+  height: 18px;
+}
+
+.card-action-list {
+  display: grid;
+  position: absolute;
+  z-index: 25;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 168px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.card-action-list button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 800;
+  text-align: left;
+}
+
+.card-action-list button:hover:not(:disabled) {
+  background: var(--surface-soft);
+}
+
+.card-action-list button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.card-action-list svg {
+  width: 16px;
+  height: 16px;
+}
+
+.danger-menu-item {
+  color: var(--danger) !important;
+}
+
+.card-edit-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.user-edit-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.card-edit-form input,
+.card-edit-form select {
+  min-height: 44px;
+  padding: 10px 12px;
+  font-size: 0.92rem;
+}
+
+.card-edit-form .wide-field,
+.card-edit-actions {
+  grid-column: 1 / -1;
+}
+
+.card-edit-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.card-edit-actions button {
+  min-height: 42px;
+}
+
 .user-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   min-width: 0;
 }
 
@@ -2601,6 +2759,35 @@ select:focus {
   overflow-wrap: anywhere;
 }
 
+.emp-details-table .table-row {
+  grid-template-columns:
+    minmax(160px, 1.2fr) minmax(130px, 0.95fr) minmax(160px, 1fr)
+    minmax(180px, 1.15fr) minmax(120px, 0.85fr) auto;
+}
+
+.emp-details-edit-form {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns:
+    minmax(160px, 1.2fr) minmax(150px, 0.95fr) minmax(160px, 1fr)
+    minmax(180px, 1.15fr) minmax(120px, 0.85fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.emp-details-edit-form input {
+  min-height: 42px;
+}
+
+.emp-details-actions {
+  justify-content: flex-end;
+}
+
+.compact-row-button {
+  min-height: 38px;
+  padding: 0 12px;
+}
+
 .row-actions {
   display: flex;
   gap: 8px;
@@ -2623,6 +2810,40 @@ select:focus {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 520px));
   gap: 16px;
+}
+
+.leave-record-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 0 12px;
+}
+
+.leave-record-head h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.leave-record-head span {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.leave-empty {
+  display: grid;
+  gap: 4px;
+  max-width: 520px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--muted);
+  box-shadow: var(--shadow-soft);
+}
+
+.leave-empty strong {
+  color: var(--ink);
 }
 
 .leave-card-head {
@@ -3397,6 +3618,10 @@ select:focus {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .emp-details-edit-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .attendance-list-row {
     grid-template-columns: 56px repeat(2, minmax(0, 1fr));
   }
@@ -3537,6 +3762,9 @@ select:focus {
   .inline-form.branch-form,
   .inline-form.task-form,
   .task-builder-card,
+  .card-edit-form,
+  .user-edit-form,
+  .emp-details-edit-form,
   .inline-form.calendar-form,
   .inline-form.holiday-form,
   .regularization-fields,

@@ -1,18 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const UPLOAD_DIR =
-  process.env.UPLOAD_DIR ||
-  join(
-    process.env.NETLIFY === "true" || process.env.AWS_LAMBDA_FUNCTION_NAME
-      ? tmpdir()
-      : process.cwd(),
-    "frontend",
-    "public",
-    "uploads",
-  );
+  process.env.UPLOAD_DIR || join(process.cwd(), "uploads");
 
 function extensionFromMime(mimeType = "") {
   if (mimeType.includes("png")) return "png";

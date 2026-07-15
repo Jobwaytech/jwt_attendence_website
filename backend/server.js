@@ -12,7 +12,6 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createServer as createHttpsServer } from "node:https";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync, inflateSync } from "node:zlib";
 import { connectDB, isMongoConnected } from "./config/db.js";
@@ -32,9 +31,6 @@ const PROJECT_DIR = process.cwd();
 const BACKEND_DIR = existsSync(join(PROJECT_DIR, "server.js"))
   ? PROJECT_DIR
   : join(PROJECT_DIR, "backend");
-const IS_NETLIFY = process.env.NETLIFY === "true" || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
-const IS_VERCEL = process.env.VERCEL === "1";
-const IS_SERVERLESS = IS_NETLIFY || IS_VERCEL;
 const __dirname = BACKEND_DIR;
 const app = express();
 const PORT = process.env.API_PORT || process.env.PORT || 5000;
@@ -69,8 +65,14 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
-const DATA_DIR = process.env.DATA_DIR || join(IS_SERVERLESS ? tmpdir() : __dirname, "data");
+const DATA_DIR = process.env.DATA_DIR || join(__dirname, "data");
 const PUBLIC_DIR = join(FRONTEND_DIR, "public");
+const MONTHLY_ATTENDANCE_REPORT_PDF = join(
+  __dirname,
+  "assets",
+  "reports",
+  "monthly-attendance-report.pdf",
+);
 const PAYSLIP_LOGO_PATHS = [
   join(PUBLIC_DIR, "assets", "job-way-tech-logo.png"),
   join(PUBLIC_DIR, "job-way-tech-logo.png"),
@@ -201,18 +203,6 @@ async function ensureRuntimeReady() {
     })();
   }
   return runtimeReadyPromise;
-}
-
-if (IS_VERCEL) {
-  app.use(async (_req, res, next) => {
-    try {
-      await ensureRuntimeReady();
-      next();
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ message: "Server startup failed." });
-    }
-  });
 }
 
 app.get("/api/health", (_req, res) => {
@@ -398,15 +388,17 @@ function writeUsers(users) {
   syncBranchAssignments();
 }
 
+function localDateValue(value) {
+  if (!value) return "";
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
+}
+
 function mongoUserToLocalUser(mongoUser) {
   const id = String(mongoUser._id || mongoUser.id || "");
   const branchId = mongoUser.branchId ? String(mongoUser.branchId) : null;
-  const dob =
-    mongoUser.dob instanceof Date
-      ? mongoUser.dob.toISOString().slice(0, 10)
-      : mongoUser.dob
-        ? String(mongoUser.dob).slice(0, 10)
-        : "";
+  const dob = localDateValue(mongoUser.dob);
+  const dateOfJoining = localDateValue(mongoUser.dateOfJoining);
 
   return {
     id,
@@ -417,6 +409,10 @@ function mongoUserToLocalUser(mongoUser) {
     branchId,
     phone: mongoUser.phone || "",
     dob,
+    dateOfJoining,
+    bankName: mongoUser.bankName || "",
+    bankAccountNumber: mongoUser.bankAccountNumber || "",
+    panNumber: mongoUser.panNumber || "",
     profile: mongoUser.profile || "",
     employeeId: mongoUser.employeeId || undefined,
     studentId: mongoUser.studentId || undefined,
@@ -555,14 +551,12 @@ async function requireAuth(req, res, next) {
 
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    if (!IS_SERVERLESS) {
-      const sessions = readJson(FILES.sessions, []);
-      const session = sessions.find(
-        (item) => item.id === payload.sessionId && !item.revokedAt,
-      );
-      if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
-        return res.status(401).json({ message: "Session expired or revoked." });
-      }
+    const sessions = readJson(FILES.sessions, []);
+    const session = sessions.find(
+      (item) => item.id === payload.sessionId && !item.revokedAt,
+    );
+    if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
+      return res.status(401).json({ message: "Session expired or revoked." });
     }
     let user = readUsers().find((item) => item.id === payload.id);
     if (!user && isMongoConnected()) {
@@ -1579,6 +1573,10 @@ app.post("/api/register", async (req, res) => {
   const branchId = req.body.branchId || null;
   const phone = String(req.body.phone || "").trim();
   const dob = String(req.body.dob || "").trim();
+  const dateOfJoining = String(req.body.dateOfJoining || "").trim();
+  const bankName = String(req.body.bankName || "").trim();
+  const bankAccountNumber = String(req.body.bankAccountNumber || "").trim();
+  const panNumber = String(req.body.panNumber || "").trim().toUpperCase();
   const profile = String(req.body.profile || "").trim();
   const salary = Number(req.body.salary || 0);
 
@@ -1597,6 +1595,8 @@ app.post("/api/register", async (req, res) => {
       .json({ message: "Branch is required for this role." });
   if (dob && Number.isNaN(new Date(dob).getTime()))
     return res.status(400).json({ message: "Enter a valid DOB." });
+  if (dateOfJoining && Number.isNaN(new Date(dateOfJoining).getTime()))
+    return res.status(400).json({ message: "Enter a valid date of joining." });
   if (
     branchId &&
     !readJson(FILES.branches, []).some((branch) => branch.id === branchId)
@@ -1618,6 +1618,10 @@ app.post("/api/register", async (req, res) => {
     branchId,
     phone,
     dob,
+    dateOfJoining,
+    bankName,
+    bankAccountNumber,
+    panNumber,
     profile,
     employeeId: STAFF_ROLES.includes(role)
       ? `EMP-${String(users.length + 1001).padStart(4, "0")}`
@@ -1889,6 +1893,16 @@ app.put(
       name: String(req.body.name || target.name).trim(),
       phone: String(req.body.phone ?? target.phone ?? "").trim(),
       dob: String(req.body.dob ?? target.dob ?? "").trim(),
+      dateOfJoining: String(
+        req.body.dateOfJoining ?? target.dateOfJoining ?? "",
+      ).trim(),
+      bankName: String(req.body.bankName ?? target.bankName ?? "").trim(),
+      bankAccountNumber: String(
+        req.body.bankAccountNumber ?? target.bankAccountNumber ?? "",
+      ).trim(),
+      panNumber: String(req.body.panNumber ?? target.panNumber ?? "")
+        .trim()
+        .toUpperCase(),
       profile: String(req.body.profile ?? target.profile ?? "").trim(),
       branchId: nextBranchId,
       salary:
@@ -2708,7 +2722,10 @@ app.get(
         "Content-Disposition",
         `attachment; filename="monthly-report-${month}.pdf"`,
       );
-      return res.send(simplePdf("Monthly Employee Report", lines));
+      return res.send(
+        monthlyAttendanceReportSample() ||
+          simplePdf("Monthly Employee Report", lines),
+      );
     }
     res.setHeader("Content-Type", "application/vnd.ms-excel");
     res.setHeader(
@@ -3121,8 +3138,12 @@ export async function initializeRuntime() {
   return runtimeReady;
 }
 
-if (process.env.VERCEL !== "1" && process.env.NETLIFY !== "true") {
-  startServer();
+function monthlyAttendanceReportSample() {
+  return existsSync(MONTHLY_ATTENDANCE_REPORT_PDF)
+    ? readFileSync(MONTHLY_ATTENDANCE_REPORT_PDF)
+    : null;
 }
+
+startServer();
 
 export default app;

@@ -39,7 +39,7 @@ const resources = {
   tasks: {
     Model: Task,
     listKey: "tasks",
-    writeRoles: ["super_admin", "branch_admin"],
+    writeRoles: ["super_admin", "branch_admin", "employee"],
   },
   payroll: {
     Model: Payroll,
@@ -134,6 +134,14 @@ function emptyFilter() {
   return { _id: { $exists: false } };
 }
 
+function duplicateMessageFor(error) {
+  if (error?.code !== 11000) return null;
+  const fields = Object.keys(error.keyPattern || error.keyValue || {});
+  if (fields.includes("email")) return "Email already exists.";
+  if (fields.length) return `${fields[0]} already exists.`;
+  return "Duplicate record.";
+}
+
 async function scopedReadFilter(req, baseFilter) {
   const role = req.user?.role;
   const key = req.mongoResource.key;
@@ -151,6 +159,12 @@ async function scopedReadFilter(req, baseFilter) {
 
   if (["branches"].includes(key)) {
     return branchId ? { ...baseFilter, _id: branchId } : emptyFilter();
+  }
+
+  if (["leaves"].includes(key)) {
+    if (role === "branch_admin")
+      return branchId ? { ...baseFilter, branchId } : emptyFilter();
+    return userId ? { ...baseFilter, userId } : emptyFilter();
   }
 
   if (["payroll", "payrolls"].includes(key)) {
@@ -233,9 +247,17 @@ export function registerMongoCrudRoutes(app, { requireAuth }) {
           }
           delete body.password;
         }
+        if (req.mongoResource.key === "leaves" && req.user?.role !== "super_admin" && req.user?.role !== "branch_admin") {
+          body.status = "pending";
+          delete body.decidedBy;
+          delete body.decidedAt;
+        }
         const item = await req.mongoResource.Model.create(body);
         res.status(201).json({ item });
       } catch (error) {
+        const duplicateMessage = duplicateMessageFor(error);
+        if (duplicateMessage)
+          return res.status(409).json({ message: duplicateMessage });
         next(error);
       }
     },
@@ -262,8 +284,44 @@ export function registerMongoCrudRoutes(app, { requireAuth }) {
           }
           delete body.password;
         }
-        const item = await req.mongoResource.Model.findByIdAndUpdate(
-          req.params.id,
+        if (req.mongoResource.key === "leaves" && req.user?.role !== "super_admin" && req.user?.role !== "branch_admin") {
+          delete body.status;
+          delete body.decidedBy;
+          delete body.decidedAt;
+        }
+        if (req.mongoResource.key === "tasks" && req.user?.role === "employee") {
+          const user = await currentMongoUser(req);
+          if (!user)
+            return res.status(403).json({ message: "Employee account not found." });
+          const task = await req.mongoResource.Model.findOne({
+            _id: req.params.id,
+            "assignments.userId": user._id,
+          });
+          if (!task)
+            return res.status(404).json({ message: "Assigned task not found." });
+          const requestedAssignment = Array.isArray(body.assignments)
+            ? body.assignments.find(
+                (assignment) => String(assignment.userId) === String(user._id),
+              )
+            : null;
+          if (!requestedAssignment)
+            return res.status(400).json({ message: "Your task update is missing." });
+          const assignment = task.assignments.find(
+            (item) => String(item.userId) === String(user._id),
+          );
+          assignment.status = requestedAssignment.status ?? assignment.status;
+          assignment.progress = requestedAssignment.progress ?? assignment.progress;
+          assignment.remarks = requestedAssignment.remarks ?? assignment.remarks;
+          assignment.updatedAt = new Date();
+          await task.save();
+          return res.json({ item: task });
+        }
+        const updateFilter =
+          req.mongoResource.key === "leaves"
+            ? await scopedReadFilter(req, { _id: req.params.id })
+            : { _id: req.params.id };
+        const item = await req.mongoResource.Model.findOneAndUpdate(
+          updateFilter,
           body,
           { returnDocument: "after", runValidators: true },
         );
@@ -271,6 +329,9 @@ export function registerMongoCrudRoutes(app, { requireAuth }) {
           return res.status(404).json({ message: "Record not found." });
         res.json({ item });
       } catch (error) {
+        const duplicateMessage = duplicateMessageFor(error);
+        if (duplicateMessage)
+          return res.status(409).json({ message: duplicateMessage });
         next(error);
       }
     },
@@ -284,9 +345,12 @@ export function registerMongoCrudRoutes(app, { requireAuth }) {
     canUseResource,
     async (req, res, next) => {
       try {
-        const item = await req.mongoResource.Model.findByIdAndDelete(
-          req.params.id,
-        );
+        const deleteFilter =
+          req.mongoResource.key === "leaves"
+            ? await scopedReadFilter(req, { _id: req.params.id })
+            : { _id: req.params.id };
+        const item =
+          await req.mongoResource.Model.findOneAndDelete(deleteFilter);
         if (!item)
           return res.status(404).json({ message: "Record not found." });
         res.json({ ok: true });

@@ -7,7 +7,6 @@ import {
   Camera,
   Check,
   ClipboardList,
-  Clock,
   Download,
   Eye,
   EyeOff,
@@ -15,6 +14,7 @@ import {
   FileSpreadsheet,
   Flag,
   Bell,
+  IdCard,
   WalletCards,
   MapPin,
   LayoutDashboard,
@@ -22,7 +22,10 @@ import {
   LogOut,
   Menu,
   Moon,
+  MoreVertical,
+  Pencil,
   Plus,
+  Save,
   Search,
   ShieldCheck,
   Sun,
@@ -68,6 +71,7 @@ type View =
   | "dashboard"
   | "users"
   | "branches"
+  | "emp-details"
   | "attendance"
   | "leaves"
   | "tasks"
@@ -87,6 +91,10 @@ type User = {
   branchId?: string | null;
   phone?: string;
   dob?: string;
+  dateOfJoining?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  panNumber?: string;
   profile?: string;
   employeeId?: string;
   studentId?: string;
@@ -138,6 +146,11 @@ type Attendance = {
   ipAddress?: string;
   trustedDevice?: boolean;
   securityWarning?: string;
+};
+
+type AttendancePersonRow = {
+  user: User;
+  record?: Attendance;
 };
 
 type LocationStamp = {
@@ -395,6 +408,7 @@ const ROLE_OPTIONS: { value: LoginRole; label: string }[] = [
 ];
 
 const PROFILE_ROLE_OPTIONS = [
+  "Student",
   "Branch Head",
   "Branch Incharge",
   "Customer Support Representative",
@@ -417,8 +431,37 @@ const emptyUserForm = {
   phone: "",
   picture: "",
   dob: "",
+  dateOfJoining: "",
+  bankName: "",
+  bankAccountNumber: "",
+  panNumber: "",
   profile: "",
   employeeId: "",
+};
+
+const emptyUserEditForm = {
+  name: "",
+  email: "",
+  role: "employee" as Role,
+  branchId: "",
+  phone: "",
+  picture: "",
+  dob: "",
+  dateOfJoining: "",
+  bankName: "",
+  bankAccountNumber: "",
+  panNumber: "",
+  profile: "",
+  employeeId: "",
+  studentId: "",
+  salary: "",
+};
+
+const emptyEmpDetailsForm = {
+  dateOfJoining: "",
+  bankName: "",
+  bankAccountNumber: "",
+  panNumber: "",
 };
 
 const emptyBranchForm = {
@@ -550,7 +593,7 @@ const DEFAULT_INDIAN_GOVERNMENT_HOLIDAYS_2026: Omit<
   { name: "Christmas Day", date: "2026-12-25", type: "Government Holiday" },
 ];
 
-function defaultCompanyHolidays() {
+function defaultCompanyHolidays(): CompanyHoliday[] {
   return DEFAULT_INDIAN_GOVERNMENT_HOLIDAYS_2026.map((holiday) => ({
     ...holiday,
     id: `india-gov-${holiday.date}-${holiday.name
@@ -559,6 +602,21 @@ function defaultCompanyHolidays() {
       .replace(/^-|-$/g, "")}`,
     source: "default" as const,
   }));
+}
+
+function mergeCompanyHolidays(customHolidays: CompanyHoliday[]) {
+  const holidays = [...defaultCompanyHolidays()];
+  const seen = new Set(
+    holidays.map((holiday) => `${holiday.date}-${holiday.name.toLowerCase()}`),
+  );
+  customHolidays.forEach((holiday) => {
+    const key = `${holiday.date}-${holiday.name.toLowerCase()}`;
+    if (!seen.has(key)) {
+      holidays.push(holiday);
+      seen.add(key);
+    }
+  });
+  return holidays;
 }
 
 function docId<T extends { _id?: string; id?: string }>(doc: T) {
@@ -756,12 +814,11 @@ function branchReportsFromMongo(
   });
 }
 
-function formatDateTime(value?: string | null) {
+function formatAttendanceTime(value?: string | null) {
   if (!value) return "Not recorded";
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not recorded";
+  return new Intl.DateTimeFormat("en", { timeStyle: "short" }).format(date);
 }
 
 function formatDate(value?: string | null) {
@@ -769,6 +826,13 @@ function formatDate(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(date);
+}
+
+function dateInputValue(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (!Number.isNaN(date.getTime())) return date.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
 }
 
 function initials(name?: string | null) {
@@ -792,19 +856,20 @@ function firstName(name?: string | null) {
 }
 
 function taskUserLabel(user: User, users: User[]) {
-  if (user.role === "student") {
+  const role = effectiveRole(user.role);
+  if (role === "student") {
     const index = users
-      .filter((item) => item.role === "student")
+      .filter((item) => effectiveRole(item.role) === "student")
       .findIndex((item) => item.id === user.id);
     return `S${index + 1}`;
   }
-  if (user.role === "employee") {
+  if (role === "employee") {
     const employeeSlot = String(user.employeeId || "").match(
       /^EMP-E(\d+)$/i,
     )?.[1];
     if (employeeSlot) return `E${employeeSlot}`;
     const index = users
-      .filter((item) => item.role === "employee")
+      .filter((item) => effectiveRole(item.role) === "employee")
       .findIndex((item) => item.id === user.id);
     return `E${index + 1}`;
   }
@@ -812,19 +877,17 @@ function taskUserLabel(user: User, users: User[]) {
 }
 
 function isTaskEmployeeUser(user: User) {
-  return (
-    user.role === "employee" &&
-    /^EMP-E\d+$/i.test(String(user.employeeId || ""))
-  );
+  return effectiveRole(user.role) === "employee";
 }
 
 function taskUserSortValue(user: User) {
+  const role = effectiveRole(user.role);
   const employeeSlot = String(user.employeeId || "").match(
     /^EMP-E(\d+)$/i,
   )?.[1];
   if (employeeSlot) return Number(employeeSlot);
-  if (user.role === "employee") return 100;
-  if (user.role === "student") return 200;
+  if (role === "employee") return 100;
+  if (role === "student") return 200;
   return 300;
 }
 
@@ -877,6 +940,13 @@ function canUseEmployeeTools(session: User | null) {
   return (
     !!session &&
     ["employee", "branch_admin"].includes(effectiveRole(session.role))
+  );
+}
+
+function canApplyLeave(session: User | null) {
+  return (
+    !!session &&
+    ["employee", "student", "branch_admin"].includes(effectiveRole(session.role))
   );
 }
 
@@ -944,7 +1014,13 @@ export default function Home() {
   >("all");
   const [search, setSearch] = useState("");
   const [userForm, setUserForm] = useState(emptyUserForm);
+  const [editingUserId, setEditingUserId] = useState("");
+  const [userEditForm, setUserEditForm] = useState(emptyUserEditForm);
+  const [editingEmpDetailsId, setEditingEmpDetailsId] = useState("");
+  const [empDetailsForm, setEmpDetailsForm] = useState(emptyEmpDetailsForm);
   const [branchForm, setBranchForm] = useState(emptyBranchForm);
+  const [editingBranchId, setEditingBranchId] = useState("");
+  const [branchEditForm, setBranchEditForm] = useState(emptyBranchForm);
   const [leaveForm, setLeaveForm] = useState(emptyLeaveForm);
   const [taskForm, setTaskForm] = useState(emptyTaskForm);
   const [teamForm, setTeamForm] = useState(emptyTeamForm);
@@ -1000,6 +1076,14 @@ export default function Home() {
     () => users.find((user) => user.email === session?.email) || session,
     [session, users],
   );
+  const empDetailsUsers = useMemo(() => {
+    if (canManage(session)) return employeeUsers;
+    const userId = mongoSessionUser?.id || session?.id || "";
+    return employeeUsers.filter((user) => user.id === userId);
+  }, [employeeUsers, mongoSessionUser?.id, session]);
+  const empDetailsRows = useMemo(() => {
+    return empDetailsUsers.map((user) => ({ user }));
+  }, [empDetailsUsers]);
   const payrollBranches = branches;
   const visiblePayroll = useMemo(
     () =>
@@ -1034,17 +1118,20 @@ export default function Home() {
         : true;
       return record.date === attendanceMonitorDate && matchesBranch;
     });
+    const recordByUserId = new Map(
+      dayRecords.map((record) => [record.userId, record]),
+    );
     const presentIds = new Set(
       dayRecords
         .filter((record) => record.status === "present")
         .map((record) => record.userId),
     );
-    const presentUsers = monitoredUsers.filter((user) =>
-      presentIds.has(user.id),
-    );
-    const absentUsers = monitoredUsers.filter(
-      (user) => !presentIds.has(user.id),
-    );
+    const presentUsers = monitoredUsers
+      .filter((user) => presentIds.has(user.id))
+      .map((user) => ({ user, record: recordByUserId.get(user.id) }));
+    const absentUsers = monitoredUsers
+      .filter((user) => !presentIds.has(user.id))
+      .map((user) => ({ user, record: recordByUserId.get(user.id) }));
     return {
       branchName: attendanceMonitorBranchId
         ? branches.find((branch) => branch.id === attendanceMonitorBranchId)
@@ -1149,6 +1236,12 @@ export default function Home() {
       }),
     );
   }, [attendance, branches, leaves, users]);
+
+  const visibleLeaves = useMemo(() => {
+    if (canManage(session)) return leaves;
+    const userId = mongoSessionUser?.id || session?.id || "";
+    return leaves.filter((leave) => leave.userId === userId);
+  }, [leaves, mongoSessionUser?.id, session]);
 
   const stats = useMemo(() => {
     const currentYear = new Date().getFullYear().toString();
@@ -1269,21 +1362,6 @@ export default function Home() {
       .slice(0, 4);
   }, [sortedCompanyHolidays]);
 
-  useEffect(() => {
-    const savedTheme =
-      (localStorage.getItem(STORAGE_KEYS.theme) as Theme | null) || "light";
-    setTheme(savedTheme);
-    document.documentElement.dataset.theme = savedTheme;
-    const savedUser = localStorage.getItem(STORAGE_KEYS.user);
-    if (savedUser) setSession(JSON.parse(savedUser));
-    hydrateSession();
-    return () => stopCamera();
-  }, []);
-
-  useEffect(() => {
-    if (session && canManage(session)) void loadAnalytics();
-  }, [session]);
-
   async function apiRequest<T>(path: string, options: RequestInit = {}) {
     const headers = new Headers(options.headers);
     headers.set("Content-Type", "application/json");
@@ -1311,19 +1389,6 @@ export default function Home() {
       );
     }
     return data as T;
-  }
-
-  async function authRequest<T>(path: string, options: RequestInit = {}) {
-    return serviceApiRequest<T>(path, options);
-  }
-
-  async function loadAnalytics() {
-    try {
-      const data = await apiRequest<AnalyticsData>("/api/analytics/dashboard");
-      setAnalytics(data);
-    } catch {
-      setAnalytics(null);
-    }
   }
 
   function toast(message: string, isError = false) {
@@ -1438,15 +1503,22 @@ export default function Home() {
           page: 1,
           limit: 500,
         })),
-        mongoList<MongoReport>("reports", {
-          limit: 100,
-          sort: "-createdAt",
-        }).catch(() => ({
-          reports: [] as MongoReport[],
-          total: 0,
-          page: 1,
-          limit: 100,
-        })),
+        canManage(activeUser)
+          ? mongoList<MongoReport>("reports", {
+              limit: 100,
+              sort: "-createdAt",
+            }).catch(() => ({
+              reports: [] as MongoReport[],
+              total: 0,
+              page: 1,
+              limit: 100,
+            }))
+          : Promise.resolve({
+              reports: [] as MongoReport[],
+              total: 0,
+              page: 1,
+              limit: 100,
+            }),
         mongoList<MongoRegularization>("attendance_regularizations", {
           limit: 500,
           sort: "-createdAt",
@@ -1538,9 +1610,11 @@ export default function Home() {
           .slice(0, 6),
       );
       setCompanyHolidays(
-        nextEvents
-          .map(calendarEventToHoliday)
-          .filter((holiday): holiday is CompanyHoliday => !!holiday),
+        mergeCompanyHolidays(
+          nextEvents
+            .map(calendarEventToHoliday)
+            .filter((holiday): holiday is CompanyHoliday => !!holiday),
+        ),
       );
       setPayroll(nextPayroll);
       setReports(
@@ -1562,7 +1636,6 @@ export default function Home() {
       );
       setTeams(teamsData.teams || []);
       setRegularization(nextRegularization);
-      if (canManage(activeUser)) void loadAnalytics();
     } catch (caught) {
       const message =
         caught instanceof Error
@@ -1660,6 +1733,7 @@ export default function Home() {
     setTeams([]);
     setCalendarEvents([]);
     setCalendarNotifications([]);
+    setCompanyHolidays([]);
     setPayroll([]);
     setRegularization([]);
     setMonthlyReport(null);
@@ -1775,6 +1849,88 @@ export default function Home() {
     }
   }
 
+  function startEditUser(user: User) {
+    setEditingUserId(user.id);
+    setUserEditForm({
+      name: user.name || "",
+      email: user.email || "",
+      role: user.role || "employee",
+      branchId: user.branchId || "",
+      phone: user.phone || "",
+      picture: user.picture || "",
+      dob: dateInputValue(user.dob),
+      dateOfJoining: dateInputValue(user.dateOfJoining),
+      bankName: user.bankName || "",
+      bankAccountNumber: user.bankAccountNumber || "",
+      panNumber: user.panNumber || "",
+      profile: user.profile || "",
+      employeeId: user.employeeId || "",
+      studentId: user.studentId || "",
+      salary: user.salary ? String(user.salary) : "",
+    });
+  }
+
+  async function updateUserProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingUserId) return;
+    try {
+      const payload = {
+        ...userEditForm,
+        dob: userEditForm.dob || undefined,
+        dateOfJoining: userEditForm.dateOfJoining || undefined,
+        branchId: userEditForm.branchId || undefined,
+        bankName: userEditForm.bankName.trim(),
+        bankAccountNumber: userEditForm.bankAccountNumber.trim(),
+        panNumber: userEditForm.panNumber.trim().toUpperCase(),
+        salary: userEditForm.salary ? Number(userEditForm.salary) : undefined,
+      };
+      await mongoUpdate("users", editingUserId, payload);
+      setEditingUserId("");
+      setUserEditForm(emptyUserEditForm);
+      await loadWorkspace();
+      toast("Profile updated.");
+    } catch (caught) {
+      toast(
+        caught instanceof Error ? caught.message : "Unable to update profile.",
+        true,
+      );
+    }
+  }
+
+  function startEditEmpDetails(user: User) {
+    setEditingEmpDetailsId(user.id);
+    setEmpDetailsForm({
+      dateOfJoining: dateInputValue(user.dateOfJoining),
+      bankName: user.bankName || "",
+      bankAccountNumber: user.bankAccountNumber || "",
+      panNumber: user.panNumber || "",
+    });
+  }
+
+  async function updateEmpDetails(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingEmpDetailsId) return;
+    try {
+      await mongoUpdate("users", editingEmpDetailsId, {
+        dateOfJoining: empDetailsForm.dateOfJoining || undefined,
+        bankName: empDetailsForm.bankName.trim(),
+        bankAccountNumber: empDetailsForm.bankAccountNumber.trim(),
+        panNumber: empDetailsForm.panNumber.trim().toUpperCase(),
+      });
+      setEditingEmpDetailsId("");
+      setEmpDetailsForm(emptyEmpDetailsForm);
+      await loadWorkspace();
+      toast("Employee details updated.");
+    } catch (caught) {
+      toast(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to update employee details.",
+        true,
+      );
+    }
+  }
+
   async function changeUserPassword(user: User) {
     if (session?.role !== "super_admin") {
       toast("Only Super Admin can change passwords.", true);
@@ -1847,6 +2003,35 @@ export default function Home() {
     }
   }
 
+  function startEditBranch(branch: Branch) {
+    setEditingBranchId(branch.id);
+    setBranchEditForm({
+      name: branch.name || "",
+      code: branch.code || "",
+      address: branch.address || "",
+      manager: branch.manager || "",
+      contactEmail: branch.contactEmail || "",
+      contactPhone: branch.contactPhone || "",
+    });
+  }
+
+  async function updateBranch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingBranchId) return;
+    try {
+      await mongoUpdate("branches", editingBranchId, branchEditForm);
+      setEditingBranchId("");
+      setBranchEditForm(emptyBranchForm);
+      await loadWorkspace();
+      toast("Branch updated.");
+    } catch (caught) {
+      toast(
+        caught instanceof Error ? caught.message : "Unable to update branch.",
+        true,
+      );
+    }
+  }
+
   async function deleteBranch(branch: Branch) {
     try {
       await mongoDelete("branches", branch.id);
@@ -1898,6 +2083,40 @@ export default function Home() {
     streamRef.current = null;
     setCameraOn(false);
   }
+
+  useEffect(() => {
+    const savedTheme =
+      (localStorage.getItem(STORAGE_KEYS.theme) as Theme | null) || "light";
+    document.documentElement.dataset.theme = savedTheme;
+    const savedUser = localStorage.getItem(STORAGE_KEYS.user);
+    const hydrationFrame = window.requestAnimationFrame(() => {
+      setTheme(savedTheme);
+      if (savedUser) setSession(JSON.parse(savedUser));
+      void hydrateSession();
+    });
+    return () => {
+      window.cancelAnimationFrame(hydrationFrame);
+      stopCamera();
+    };
+    // The session bootstrap intentionally runs once when the client mounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (session && canManage(session)) {
+      void serviceApiRequest<AnalyticsData>("/api/analytics/dashboard")
+        .then((data) => {
+          if (active) setAnalytics(data);
+        })
+        .catch(() => {
+          if (active) setAnalytics(null);
+        });
+    }
+    return () => {
+      active = false;
+    };
+  }, [session]);
 
   function captureFrame() {
     const video = videoRef.current;
@@ -2623,6 +2842,12 @@ export default function Home() {
       icon: Building2,
       show: canManage(session),
     },
+    {
+      id: "emp-details" as View,
+      label: "Emp details",
+      icon: IdCard,
+      show: effectiveRole(session.role) !== "student",
+    },
     { id: "attendance" as View, label: "Attendance", icon: Camera, show: true },
     { id: "leaves" as View, label: "Leaves", icon: CalendarCheck, show: true },
     { id: "tasks" as View, label: "Tasks", icon: ClipboardList, show: true },
@@ -2994,13 +3219,55 @@ export default function Home() {
                   }
                 />
               </label>
+              <label className="field-label">
+                <span>DOB</span>
+                <input
+                  type="date"
+                  value={userForm.dob}
+                  onChange={(event) =>
+                    setUserForm({ ...userForm, dob: event.target.value })
+                  }
+                />
+              </label>
+              <label className="field-label">
+                <span>Date of joining</span>
+                <input
+                  type="date"
+                  value={userForm.dateOfJoining}
+                  onChange={(event) =>
+                    setUserForm({
+                      ...userForm,
+                      dateOfJoining: event.target.value,
+                    })
+                  }
+                />
+              </label>
               <input
-                type="date"
-                value={userForm.dob}
+                value={userForm.bankName}
                 onChange={(event) =>
-                  setUserForm({ ...userForm, dob: event.target.value })
+                  setUserForm({ ...userForm, bankName: event.target.value })
                 }
-                title="DOB"
+                placeholder="Bank name"
+              />
+              <input
+                value={userForm.bankAccountNumber}
+                onChange={(event) =>
+                  setUserForm({
+                    ...userForm,
+                    bankAccountNumber: event.target.value,
+                  })
+                }
+                placeholder="Bank account number"
+              />
+              <input
+                value={userForm.panNumber}
+                onChange={(event) =>
+                  setUserForm({
+                    ...userForm,
+                    panNumber: event.target.value.toUpperCase(),
+                  })
+                }
+                placeholder="PAN number"
               />
               <select
                 value={userForm.profile}
@@ -3022,21 +3289,46 @@ export default function Home() {
             <div className="user-grid">
               {filteredUsers.map((user) => (
                 <article className="user-card" key={user.id}>
-                  <div className="user-main">
-                    <div
-                      className="avatar user-photo-avatar"
-                      style={
-                        user.picture
-                          ? { backgroundImage: `url(${user.picture})` }
-                          : undefined
-                      }
-                    >
-                      {!user.picture ? initials(displayName(user.name)) : null}
+                  <div className="card-topline">
+                    <div className="user-main">
+                      <div
+                        className="avatar user-photo-avatar"
+                        style={
+                          user.picture
+                            ? { backgroundImage: `url(${user.picture})` }
+                            : undefined
+                        }
+                      >
+                        {!user.picture
+                          ? initials(displayName(user.name))
+                          : null}
+                      </div>
+                      <div>
+                        <strong>{displayName(user.name)}</strong>
+                        <span>{user.email}</span>
+                      </div>
                     </div>
-                    <div>
-                      <strong>{displayName(user.name)}</strong>
-                      <span>{user.email}</span>
-                    </div>
+                    <details className="card-action-menu">
+                      <summary aria-label={`Open actions for ${user.name}`}>
+                        <MoreVertical />
+                      </summary>
+                      <div className="card-action-list">
+                        <button
+                          type="button"
+                          onClick={() => startEditUser(user)}
+                        >
+                          <Pencil /> Edit profile
+                        </button>
+                        <button
+                          type="button"
+                          className="danger-menu-item"
+                          disabled={user.id === session.id}
+                          onClick={() => deleteUser(user)}
+                        >
+                          <Trash2 /> Delete
+                        </button>
+                      </div>
+                    </details>
                   </div>
                   <div className="user-meta">
                     <span className={`pill ${user.role}`}>
@@ -3053,6 +3345,206 @@ export default function Home() {
                       {user.dob ? `DOB ${formatDate(user.dob)}` : "DOB not set"}
                     </span>
                   </div>
+                  {editingUserId === user.id ? (
+                    <form
+                      className="card-edit-form user-edit-form"
+                      onSubmit={updateUserProfile}
+                    >
+                      <input
+                        value={userEditForm.name}
+                        onChange={(event) =>
+                          setUserEditForm({
+                            ...userEditForm,
+                            name: event.target.value,
+                          })
+                        }
+                        placeholder="Name"
+                        required
+                      />
+                      <input
+                        type="email"
+                        value={userEditForm.email}
+                        onChange={(event) =>
+                          setUserEditForm({
+                            ...userEditForm,
+                            email: event.target.value,
+                          })
+                        }
+                        placeholder="Email"
+                        required
+                      />
+                      <select
+                        value={userEditForm.role}
+                        onChange={(event) =>
+                          setUserEditForm({
+                            ...userEditForm,
+                            role: event.target.value as Role,
+                          })
+                        }
+                      >
+                        {ROLE_OPTIONS.map((role) => (
+                          <option key={role.value} value={role.value}>
+                            {role.label}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={userEditForm.branchId}
+                        onChange={(event) =>
+                          setUserEditForm({
+                            ...userEditForm,
+                            branchId: event.target.value,
+                          })
+                        }
+                      >
+                        <option value="">No branch</option>
+                        {branches.map((branch) => (
+                          <option key={branch.id} value={branch.id}>
+                            {branch.name}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        value={userEditForm.employeeId}
+                        onChange={(event) =>
+                          setUserEditForm({
+                            ...userEditForm,
+                            employeeId: event.target.value,
+                          })
+                        }
+                        placeholder="Employee ID"
+                      />
+                      <input
+                        value={userEditForm.studentId}
+                        onChange={(event) =>
+                          setUserEditForm({
+                            ...userEditForm,
+                            studentId: event.target.value,
+                          })
+                        }
+                        placeholder="Student ID"
+                      />
+                      <label className="field-label">
+                        <span>DOB</span>
+                        <input
+                          type="date"
+                          value={userEditForm.dob}
+                          onChange={(event) =>
+                            setUserEditForm({
+                              ...userEditForm,
+                              dob: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="field-label">
+                        <span>Date of joining</span>
+                        <input
+                          type="date"
+                          value={userEditForm.dateOfJoining}
+                          onChange={(event) =>
+                            setUserEditForm({
+                              ...userEditForm,
+                              dateOfJoining: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <input
+                        value={userEditForm.bankName}
+                        onChange={(event) =>
+                          setUserEditForm({
+                            ...userEditForm,
+                            bankName: event.target.value,
+                          })
+                        }
+                        placeholder="Bank name"
+                      />
+                      <input
+                        value={userEditForm.bankAccountNumber}
+                        onChange={(event) =>
+                          setUserEditForm({
+                            ...userEditForm,
+                            bankAccountNumber: event.target.value,
+                          })
+                        }
+                        placeholder="Bank account number"
+                      />
+                      <input
+                        value={userEditForm.panNumber}
+                        onChange={(event) =>
+                          setUserEditForm({
+                            ...userEditForm,
+                            panNumber: event.target.value.toUpperCase(),
+                          })
+                        }
+                        placeholder="PAN number"
+                      />
+                      <select
+                        value={userEditForm.profile}
+                        onChange={(event) =>
+                          setUserEditForm({
+                            ...userEditForm,
+                            profile: event.target.value,
+                          })
+                        }
+                      >
+                        <option value="">Profile role</option>
+                        {PROFILE_ROLE_OPTIONS.map((role) => (
+                          <option key={role} value={role}>
+                            {role}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        value={userEditForm.phone}
+                        onChange={(event) =>
+                          setUserEditForm({
+                            ...userEditForm,
+                            phone: event.target.value,
+                          })
+                        }
+                        placeholder="Phone"
+                      />
+                      <input
+                        type="number"
+                        value={userEditForm.salary}
+                        onChange={(event) =>
+                          setUserEditForm({
+                            ...userEditForm,
+                            salary: event.target.value,
+                          })
+                        }
+                        placeholder="Salary"
+                      />
+                      <input
+                        className="wide-field"
+                        value={userEditForm.picture}
+                        onChange={(event) =>
+                          setUserEditForm({
+                            ...userEditForm,
+                            picture: event.target.value,
+                          })
+                        }
+                        placeholder="Photo URL"
+                      />
+                      <div className="card-edit-actions">
+                        <button className="primary-button compact" type="submit">
+                          <Save /> Save
+                        </button>
+                        <button
+                          className="ghost-button"
+                          type="button"
+                          onClick={() => {
+                            setEditingUserId("");
+                            setUserEditForm(emptyUserEditForm);
+                          }}
+                        >
+                          <X /> Cancel
+                        </button>
+                      </div>
+                    </form>
+                  ) : null}
                   {session.role === "super_admin" ? (
                     <div className="reset-box user-password-reset">
                       <input
@@ -3076,13 +3568,6 @@ export default function Home() {
                       </button>
                     </div>
                   ) : null}
-                  <button
-                    className="danger-button"
-                    disabled={user.id === session.id}
-                    onClick={() => deleteUser(user)}
-                  >
-                    <Trash2 /> Delete
-                  </button>
                 </article>
               ))}
             </div>
@@ -3167,9 +3652,35 @@ export default function Home() {
             <div className="branch-grid">
               {branches.map((branch) => (
                 <article className="branch-card" key={branch.id}>
-                  <div>
-                    <strong>{branch.name}</strong>
-                    <span>{branch.code}</span>
+                  <div className="card-topline branch-topline">
+                    <div>
+                      <strong>{branch.name}</strong>
+                      <span>{branch.code}</span>
+                    </div>
+                    {session.role === "super_admin" ? (
+                      <details className="card-action-menu">
+                        <summary
+                          aria-label={`Open actions for ${branch.name}`}
+                        >
+                          <MoreVertical />
+                        </summary>
+                        <div className="card-action-list">
+                          <button
+                            type="button"
+                            onClick={() => startEditBranch(branch)}
+                          >
+                            <Pencil /> Edit branch
+                          </button>
+                          <button
+                            type="button"
+                            className="danger-menu-item"
+                            onClick={() => deleteBranch(branch)}
+                          >
+                            <Trash2 /> Delete
+                          </button>
+                        </div>
+                      </details>
+                    ) : null}
                   </div>
                   <p>{branch.address}</p>
                   <div className="branch-metrics">
@@ -3179,13 +3690,89 @@ export default function Home() {
                   <small>
                     {branch.manager} - {branch.contactPhone}
                   </small>
-                  {session.role === "super_admin" ? (
-                    <button
-                      className="danger-button"
-                      onClick={() => deleteBranch(branch)}
-                    >
-                      <Trash2 /> Delete
-                    </button>
+                  {editingBranchId === branch.id ? (
+                    <form className="card-edit-form" onSubmit={updateBranch}>
+                      <input
+                        value={branchEditForm.name}
+                        onChange={(event) =>
+                          setBranchEditForm({
+                            ...branchEditForm,
+                            name: event.target.value,
+                          })
+                        }
+                        placeholder="Branch name"
+                        required
+                      />
+                      <input
+                        value={branchEditForm.code}
+                        onChange={(event) =>
+                          setBranchEditForm({
+                            ...branchEditForm,
+                            code: event.target.value,
+                          })
+                        }
+                        placeholder="Code"
+                        required
+                      />
+                      <input
+                        className="wide-field"
+                        value={branchEditForm.address}
+                        onChange={(event) =>
+                          setBranchEditForm({
+                            ...branchEditForm,
+                            address: event.target.value,
+                          })
+                        }
+                        placeholder="Address"
+                        required
+                      />
+                      <input
+                        value={branchEditForm.manager}
+                        onChange={(event) =>
+                          setBranchEditForm({
+                            ...branchEditForm,
+                            manager: event.target.value,
+                          })
+                        }
+                        placeholder="Manager"
+                      />
+                      <input
+                        type="email"
+                        value={branchEditForm.contactEmail}
+                        onChange={(event) =>
+                          setBranchEditForm({
+                            ...branchEditForm,
+                            contactEmail: event.target.value,
+                          })
+                        }
+                        placeholder="Contact email"
+                      />
+                      <input
+                        value={branchEditForm.contactPhone}
+                        onChange={(event) =>
+                          setBranchEditForm({
+                            ...branchEditForm,
+                            contactPhone: event.target.value,
+                          })
+                        }
+                        placeholder="Phone"
+                      />
+                      <div className="card-edit-actions">
+                        <button className="primary-button compact" type="submit">
+                          <Save /> Save
+                        </button>
+                        <button
+                          className="ghost-button"
+                          type="button"
+                          onClick={() => {
+                            setEditingBranchId("");
+                            setBranchEditForm(emptyBranchForm);
+                          }}
+                        >
+                          <X /> Cancel
+                        </button>
+                      </div>
+                    </form>
                   ) : null}
                 </article>
               ))}
@@ -3212,6 +3799,119 @@ export default function Home() {
                     <span>0 employees</span>
                     <span>0 students</span>
                   </div>
+                </article>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        {view === "emp-details" ? (
+          <section className="panel">
+            <div className="section-heading">
+              <div>
+                <h1>Emp details</h1>
+                <p>
+                  Review employee joining and bank account details for payroll
+                  records.
+                </p>
+              </div>
+            </div>
+            <div className="table-list emp-details-table">
+              {empDetailsRows.map(({ user }) => (
+                <article className="table-row" key={user.id}>
+                  {editingEmpDetailsId === user.id ? (
+                    <form
+                      className="emp-details-edit-form"
+                      onSubmit={updateEmpDetails}
+                    >
+                      <strong>{displayName(user.name)}</strong>
+                      <label className="field-label">
+                        <span>Date of joining</span>
+                        <input
+                          type="date"
+                          value={empDetailsForm.dateOfJoining}
+                          onChange={(event) =>
+                            setEmpDetailsForm({
+                              ...empDetailsForm,
+                              dateOfJoining: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <input
+                        value={empDetailsForm.bankName}
+                        onChange={(event) =>
+                          setEmpDetailsForm({
+                            ...empDetailsForm,
+                            bankName: event.target.value,
+                          })
+                        }
+                        placeholder="Bank name"
+                      />
+                      <input
+                        value={empDetailsForm.bankAccountNumber}
+                        onChange={(event) =>
+                          setEmpDetailsForm({
+                            ...empDetailsForm,
+                            bankAccountNumber: event.target.value,
+                          })
+                        }
+                        placeholder="Bank account number"
+                      />
+                      <input
+                        value={empDetailsForm.panNumber}
+                        onChange={(event) =>
+                          setEmpDetailsForm({
+                            ...empDetailsForm,
+                            panNumber: event.target.value.toUpperCase(),
+                          })
+                        }
+                        placeholder="PAN number"
+                      />
+                      <div className="row-actions emp-details-actions">
+                        <button className="primary-button compact" type="submit">
+                          <Save /> Save
+                        </button>
+                        <button
+                          className="ghost-button"
+                          type="button"
+                          onClick={() => {
+                            setEditingEmpDetailsId("");
+                            setEmpDetailsForm(emptyEmpDetailsForm);
+                          }}
+                        >
+                          <X /> Cancel
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <>
+                      <strong>{displayName(user.name)}</strong>
+                      <span>
+                        {user.dateOfJoining
+                          ? formatDate(user.dateOfJoining)
+                          : "DOJ not set"}
+                      </span>
+                      <span>{user.bankName || "Bank not set"}</span>
+                      <span>
+                        {user.bankAccountNumber || "Account number not set"}
+                      </span>
+                      <span>{user.panNumber || "PAN not set"}</span>
+                      <button
+                        className="ghost-button compact-row-button"
+                        type="button"
+                        onClick={() => startEditEmpDetails(user)}
+                      >
+                        <Pencil /> Edit
+                      </button>
+                    </>
+                  )}
+                </article>
+              ))}
+              {!empDetailsRows.length ? (
+                <article className="table-row">
+                  <strong>No employee details</strong>
+                  <span>Employee profiles will appear here after assignment.</span>
                 </article>
               ) : null}
             </div>
@@ -3437,7 +4137,7 @@ export default function Home() {
                 <p>Apply for leave and track approval status.</p>
               </div>
             </div>
-            {canUseEmployeeTools(session) ? (
+            {canApplyLeave(session) ? (
               <form className="inline-form" onSubmit={applyLeave}>
                 <select
                   value={leaveForm.leaveType}
@@ -3481,8 +4181,17 @@ export default function Home() {
                 </button>
               </form>
             ) : null}
+            <div className="leave-record-head">
+              <div>
+                <h2>{canManage(session) ? "Approval requests" : "My leave requests"}</h2>
+                <span>
+                  {visibleLeaves.length} request
+                  {visibleLeaves.length === 1 ? "" : "s"}
+                </span>
+              </div>
+            </div>
             <div className="leave-approval-grid">
-              {leaves.map((leave) => {
+              {visibleLeaves.map((leave) => {
                 const details = leaveDecisionDetails[leave.id];
                 return (
                   <article className="leave-approval-card" key={leave.id}>
@@ -3548,6 +4257,20 @@ export default function Home() {
                   </article>
                 );
               })}
+              {!visibleLeaves.length ? (
+                <article className="leave-empty">
+                  <strong>
+                    {canManage(session)
+                      ? "No leave requests to approve"
+                      : "No leave requests submitted"}
+                  </strong>
+                  <span>
+                    {canManage(session)
+                      ? "New employee and student leave requests will appear here."
+                      : "Submit a leave request to track its approval status here."}
+                  </span>
+                </article>
+              ) : null}
             </div>
           </section>
         ) : null}
@@ -3609,9 +4332,9 @@ export default function Home() {
                         .filter((user) =>
                           teamForm.type === "mixed"
                             ? isTaskEmployeeUser(user) ||
-                              user.role === "student"
+                              effectiveRole(user.role) === "student"
                             : teamForm.type === "student"
-                              ? user.role === "student"
+                              ? effectiveRole(user.role) === "student"
                               : isTaskEmployeeUser(user),
                         )
                         .sort(compareTaskUsers)
@@ -3696,10 +4419,7 @@ export default function Home() {
                   >
                     <option value="">Assign person</option>
                     {assignableUsers
-                      .filter(
-                        (user) =>
-                          isTaskEmployeeUser(user) || user.role === "student",
-                      )
+                      .filter(isTaskEmployeeUser)
                       .sort(compareTaskUsers)
                       .map((user) => (
                         <option key={user.id} value={user.id}>
@@ -4590,7 +5310,7 @@ function AttendancePeopleCard({
   emptyText,
 }: {
   title: string;
-  people: User[];
+  people: AttendancePersonRow[];
   branches: Branch[];
   emptyText: string;
 }) {
@@ -4608,10 +5328,12 @@ function AttendancePeopleCard({
             <span>ID / Email</span>
             <span>Role</span>
             <span>Branch</span>
+            <span>In Time</span>
+            <span>Out Time</span>
             <span>Profile</span>
           </div>
         ) : null}
-        {people.map((person, index) => {
+        {people.map(({ user: person, record }, index) => {
           const branchName =
             branches.find((branch) => branch.id === person.branchId)?.name ||
             "No branch";
@@ -4624,6 +5346,8 @@ function AttendancePeopleCard({
               </span>
               <span>{person.roleLabel || person.role}</span>
               <span>{branchName}</span>
+              <span>{formatAttendanceTime(record?.clockInAt)}</span>
+              <span>{formatAttendanceTime(record?.clockOutAt)}</span>
               <span>{person.profile || "-"}</span>
             </div>
           );
@@ -4772,37 +5496,6 @@ function HeroProfileCard({ user }: { user?: User | null }) {
   );
 }
 
-function TrendCard({
-  title,
-  data,
-}: {
-  title: string;
-  data: Record<string, number>;
-}) {
-  const entries = Object.entries(data || {})
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-6);
-  const max = Math.max(1, ...entries.map(([, value]) => value));
-  return (
-    <article className="branch-card">
-      <strong>{title}</strong>
-      {entries.length ? (
-        entries.map(([label, value]) => (
-          <div className="branch-metrics" key={label}>
-            <span>{label}</span>
-            <span>{value}</span>
-            <div className="task-progress">
-              <span style={{ width: `${Math.round((value / max) * 100)}%` }} />
-            </div>
-          </div>
-        ))
-      ) : (
-        <span>No data yet</span>
-      )}
-    </article>
-  );
-}
-
 function ReportsPanel({ reports }: { reports: BranchReport[] }) {
   return (
     <section className="panel dashboard-branch-panel">
@@ -4855,57 +5548,3 @@ function ReportsPanel({ reports }: { reports: BranchReport[] }) {
   );
 }
 
-function RecordTable({ records }: { records: Attendance[] }) {
-  return (
-    <div className="table-list">
-      {records.map((record) => (
-        <article className="table-row" key={record.id}>
-          <strong>{record.employeeName || "Employee"}</strong>
-          <span>{record.employeeCode || record.userId}</span>
-          <span>{record.roleLabel || "User"}</span>
-          <span>{record.date}</span>
-          <span>In: {formatDateTime(record.clockInAt)}</span>
-          <span>Out: {formatDateTime(record.clockOutAt)}</span>
-          <span className={`pill ${record.status || "present"}`}>
-            {record.status || "present"}
-          </span>
-          <span>
-            {record.clockInLocation
-              ? `GPS: ${record.clockInLocation.address}`
-              : "GPS pending"}
-          </span>
-          <span>
-            {record.distanceFromOffice ?? record.locationDistanceMeters ?? 0}m
-            from office
-          </span>
-          <span>Face score {record.matchScore || 0}%</span>
-          <span
-            className={`pill ${record.faceVerified ? "present" : "invalid"}`}
-          >
-            {record.faceVerified ? "Verified Face" : "Face Failed"}
-          </span>
-          <span
-            className={`pill ${record.gpsVerified ? "present" : "invalid"}`}
-          >
-            {record.gpsVerified ? "GPS Verified" : "GPS Failed"}
-          </span>
-          <span
-            className={`pill ${record.livenessVerified ? "present" : "invalid"}`}
-          >
-            {record.livenessVerified ? "Liveness Passed" : "Liveness Failed"}
-          </span>
-          {record.securityWarning ? (
-            <span>{record.securityWarning}</span>
-          ) : null}
-          {record.invalidReason ? <span>{record.invalidReason}</span> : null}
-        </article>
-      ))}
-      {!records.length ? (
-        <article className="table-row">
-          <strong>No attendance records</strong>
-          <span>Clock in to create the first record.</span>
-        </article>
-      ) : null}
-    </div>
-  );
-}
