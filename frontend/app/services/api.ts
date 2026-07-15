@@ -1,3 +1,5 @@
+import { fetchWithRetry } from "./fetchWithRetry";
+
 const TOKEN_KEY = "authflow_next_token";
 
 type RequestOptions = RequestInit & {
@@ -16,7 +18,7 @@ export async function apiRequest<T>(
     (typeof window !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null);
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const response = await fetch(path, { ...options, headers });
+  const response = await fetchWithRetry(path, { ...options, headers });
   const text = await response.text();
   let data: { message?: string } = {};
   try {

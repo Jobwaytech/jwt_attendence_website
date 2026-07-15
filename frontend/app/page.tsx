@@ -47,6 +47,7 @@ import {
   mongoList,
   mongoUpdate,
 } from "./services/api";
+import { fetchWithRetry } from "./services/fetchWithRetry";
 import {
   browserFingerprint,
   captureFaceSample,
@@ -1369,7 +1370,7 @@ export default function Home() {
     if (token) headers.set("Authorization", `Bearer ${token}`);
     let response: Response;
     try {
-      response = await fetch(path, { ...options, headers });
+      response = await fetchWithRetry(path, { ...options, headers });
     } catch {
       throw new Error(
         "Backend API is not reachable. Start the API server, then try again.",
